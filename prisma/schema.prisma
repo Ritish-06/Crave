@@ -1,0 +1,381 @@
+// Prisma Schema for CRAVE — Modular Monolith Architecture
+// Database: PostgreSQL with normalized location hierarchy, menu options, orders, and coupons
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  KITCHEN_ADMIN
+  SUPER_ADMIN
+}
+
+enum OrderStatus {
+  PLACED
+  CONFIRMED
+  PREPARING
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  NETBANKING
+  CASH_ON_DELIVERY
+}
+
+enum DietaryType {
+  VEG
+  NON_VEG
+  VEGAN
+  EGG
+}
+
+// --------------------------------------------------------
+// USER & AUTHENTICATION
+// --------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  phone         String?
+  passwordHash  String?
+  image         String?
+  role          Role      @default(CUSTOMER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  addresses     Address[]
+  orders        Order[]
+  reviews       Review[]
+  favorites     Favorite[]
+  cart          Cart?
+  groupOrders   GroupOrderParticipant[]
+}
+
+model Address {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag           String   @default("Home") // Home, Work, Other
+  recipientName String
+  phone         String
+  addressLine   String
+  locality      String
+  city          String
+  district      String
+  state         String
+  pincode       String
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders        Order[]
+
+  @@index([pincode])
+  @@index([city])
+}
+
+// --------------------------------------------------------
+// INDIA ADMINISTRATIVE LOCATION HIERARCHY
+// --------------------------------------------------------
+
+model Country {
+  id        String   @id @default(cuid())
+  code      String   @unique @default("IN") // ISO-3166-1 alpha-2
+  name      String   @default("India")
+  states    State[]
+}
+
+model State {
+  id               String     @id @default(cuid())
+  countryId        String
+  country          Country    @relation(fields: [countryId], references: [id])
+  name             String     @unique
+  isUnionTerritory Boolean    @default(false)
+  districts        District[]
+
+  @@index([name])
+}
+
+model District {
+  id        String   @id @default(cuid())
+  stateId   String
+  state     State    @relation(fields: [stateId], references: [id])
+  name      String
+  cities    City[]
+
+  @@unique([stateId, name])
+}
+
+model City {
+  id         String     @id @default(cuid())
+  districtId String
+  district   District   @relation(fields: [districtId], references: [id])
+  name       String
+  localities Locality[]
+
+  @@index([name])
+}
+
+model Locality {
+  id          String         @id @default(cuid())
+  cityId      String
+  city        City           @relation(fields: [cityId], references: [id])
+  name        String
+  pincode     String
+  deliveryZones DeliveryZone[]
+
+  @@index([pincode])
+}
+
+model DeliveryZone {
+  id           String     @id @default(cuid())
+  localityId   String
+  locality     Locality   @relation(fields: [localityId], references: [id])
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  isActive     Boolean    @default(true)
+  deliveryFee  Int        @default(49) // minor currency units / INR
+
+  @@unique([localityId, restaurantId])
+}
+
+// --------------------------------------------------------
+// RESTAURANTS & KITCHENS
+// --------------------------------------------------------
+
+model Restaurant {
+  id                   String         @id @default(cuid())
+  name                 String
+  slug                 String         @unique
+  tagline              String
+  address              String
+  city                 String
+  state                String
+  rating               Float          @default(4.8)
+  ratingCount          Int            @default(0)
+  priceForTwo          Int            @default(800)
+  prepTimeMinutes      Int            @default(25)
+  deliveryFee          Int            @default(49)
+  freeDeliveryThreshold Int           @default(499)
+  coverImage           String
+  logoImage            String
+  isOpen               Boolean        @default(true)
+  safetyRating         Float          @default(4.9)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  menuItems            MenuItem[]
+  orders               Order[]
+  deliveryZones        DeliveryZone[]
+  reviews              Review[]
+}
+
+// --------------------------------------------------------
+// MENU ITEMS & 3D STUDIO CUSTOMIZATIONS
+// --------------------------------------------------------
+
+model MenuItem {
+  id              String         @id @default(cuid())
+  restaurantId    String
+  restaurant      Restaurant     @relation(fields: [restaurantId], references: [id])
+  name            String
+  tagline         String
+  description     String
+  price           Int            // In INR integer units
+  originalPrice   Int?
+  image           String
+  dietary         DietaryType    @default(VEG)
+  cuisine         String
+  category        String
+  rating          Float          @default(4.8)
+  reviewCount     Int            @default(0)
+  prepTimeMinutes Int            @default(20)
+  isPopular       Boolean        @default(false)
+  isTrending      Boolean        @default(false)
+  isChefSpecial   Boolean        @default(false)
+  isCustomizable  Boolean        @default(false)
+  studioEnabled   Boolean        @default(false)
+  calories        Int?
+  spiceLevel      Int?           @default(1)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  options         MenuOption[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  favorites       Favorite[]
+
+  @@index([cuisine])
+  @@index([restaurantId])
+}
+
+model MenuOption {
+  id         String   @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  groupName  String   // e.g. "Bun", "Patty Stack", "Cheese"
+  name       String
+  priceDelta Int      @default(0)
+  isDefault  Boolean  @default(false)
+  meshKey    String?  // Links directly to 3D Three.js mesh key
+}
+
+// --------------------------------------------------------
+// CART
+// --------------------------------------------------------
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  items     CartItem[]
+}
+
+model CartItem {
+  id            String   @id @default(cuid())
+  cartId        String
+  cart          Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  menuItemId    String
+  menuItem      MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity      Int      @default(1)
+  customization Json?    // Serialized BurgerCustomizationState
+  unitPrice     Int
+  totalPrice    Int
+}
+
+// --------------------------------------------------------
+// ORDERS & FINANCIAL AUDIT
+// --------------------------------------------------------
+
+model Order {
+  id                   String        @id @default(cuid())
+  orderNumber          String        @unique // e.g. CRV-894210
+  userId               String
+  user                 User          @relation(fields: [userId], references: [id])
+  restaurantId         String
+  restaurant           Restaurant    @relation(fields: [restaurantId], references: [id])
+  addressId            String
+  address              Address       @relation(fields: [addressId], references: [id])
+  status               OrderStatus   @default(CONFIRMED)
+  subtotal             Int
+  deliveryFee          Int
+  tax                  Int
+  discount             Int           @default(0)
+  total                Int
+  paymentMethod        PaymentMethod @default(UPI)
+  paymentStatus        PaymentStatus @default(PAID)
+  paymentId            String?       // Razorpay payment ID
+  riderName            String?
+  riderPhone           String?
+  estimatedDelivery    DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  items                OrderItem[]
+  reviews              Review[]
+
+  @@index([userId])
+  @@index([restaurantId])
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId    String
+  menuItem      MenuItem @relation(fields: [menuItemId], references: [id])
+  nameSnapshot  String   // Preserves historical dish name
+  priceSnapshot Int      // Preserves historical price
+  quantity      Int
+  customization Json?
+  totalPrice    Int
+}
+
+// --------------------------------------------------------
+// PROMOTIONS & COUPONS
+// --------------------------------------------------------
+
+model Coupon {
+  id             String    @id @default(cuid())
+  code           String    @unique // e.g. "CRAVEFIRST"
+  discountPercent Int?     // e.g. 20
+  flatDiscount   Int?      // e.g. 100
+  minOrderValue  Int       @default(299)
+  maxDiscount    Int?      @default(150)
+  expiresAt      DateTime?
+  isActive       Boolean   @default(true)
+}
+
+// --------------------------------------------------------
+// ENGAGEMENT & SOCIAL
+// --------------------------------------------------------
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, menuItemId])
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  orderId      String?
+  order        Order?     @relation(fields: [orderId], references: [id])
+  rating       Int        // 1 to 5
+  comment      String?
+  createdAt    DateTime   @default(now())
+}
+
+model GroupOrder {
+  id             String                  @id @default(cuid())
+  creatorUserId  String
+  restaurantId   String
+  shareToken     String                  @unique
+  budgetPerUser  Int?
+  isClosed       Boolean                 @default(false)
+  createdAt      DateTime                @default(now())
+
+  participants   GroupOrderParticipant[]
+}
+
+model GroupOrderParticipant {
+  id           String     @id @default(cuid())
+  groupOrderId String
+  groupOrder   GroupOrder @relation(fields: [groupOrderId], references: [groupOrderId], onDelete: Cascade)
+  userId       String?
+  user         User?      @relation(fields: [userId], references: [id])
+  guestName    String
+  dishId       String
+  customization Json?
+  itemPrice    Int
+}

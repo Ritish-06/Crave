@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --primary: #FF4D2D;
+    --primary-hover: #E03A1A;
+    --primary-soft: #FFF1EE;
+    --primary-glow: rgba(255, 77, 45, 0.25);
+    
+    --bg-main: #FAF8F5;
+    --bg-card: #FFFFFF;
+    --bg-subtle: #F3EFEA;
+    --bg-dark: #120D0A;
+    --bg-dark-card: #1C1511;
+
+    --text-primary: #1A1715;
+    --text-secondary: #6B625B;
+    --text-muted: #9E948C;
+
+    --border-light: #EBE5DF;
+    --border-dark: #2A1F18;
+
+    --success: #16A34A;
+    --success-soft: #ECFDF5;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F3EFEA;
+}
+::-webkit-scrollbar-thumb {
+  background: #D8D0C7;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B8ADA2;
+}
+
+/* Smooth Focus Ring */
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Studio Glow & Ambient Keyframes */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 25px rgba(255, 77, 45, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 45px rgba(255, 77, 45, 0.4);
+  }
+}
+
+@keyframes cartBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.35) rotate(-6deg); }
+}
+
+.animate-cart-bounce {
+  animation: cartBounce 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.studio-glow {
+  animation: pulseGlow 4s infinite ease-in-out;
+}
+
+/* Parabolic projectile animation class */
+.flying-projectile {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  transition: all 0.75s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  border-radius: 9999px;
+}
