@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -14,20 +14,28 @@ import {
   Sparkles,
   Flame,
   ArrowRight,
+  ArrowUp,
   X,
   Layers,
   Leaf,
   UtensilsCrossed,
-  CheckCircle2
+  CheckCircle2,
+  ChevronDown,
+  Compass,
+  Zap,
+  Smile,
+  Check
 } from "lucide-react";
 import { MENU_ITEMS, MOOD_CATEGORIES } from "@/data/menuData";
 import { RESTAURANTS_DATA } from "@/data/restaurantsData";
 import { MenuItem } from "@/types";
 import { useCart } from "@/context/CartContext";
 import { DishQuickViewModal } from "@/components/explore/DishQuickViewModal";
+import { HorizontalFoodGallery } from "@/components/explore/HorizontalFoodGallery";
+import { ScrollBurger3D } from "@/components/explore/ScrollBurger3D";
 
 export default function ExplorePage() {
-  const { addItem } = useCart();
+  const { addItem, cartIconRef } = useCart();
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -36,16 +44,53 @@ export default function ExplorePage() {
   const [dietaryFilter, setDietaryFilter] = useState<"all" | "veg" | "non-veg" | "vegan">("all");
   const [priceTier, setPriceTier] = useState<"all" | "under200" | "mid" | "premium">("all");
   const [sortBy, setSortBy] = useState<"rating" | "time" | "price_asc" | "price_desc">("rating");
+
+  // Interaction States
   const [favorites, setFavorites] = useState<string[]>([]);
   const [quickViewDish, setQuickViewDish] = useState<MenuItem | null>(null);
   const [surpriseDish, setSurpriseDish] = useState<MenuItem | null>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Toggle favorite
+  // Load saved favorites from local storage
+  useEffect(() => {
+    try {
+      const savedFavs = localStorage.getItem("crave_favorites");
+      if (savedFavs) {
+        setFavorites(JSON.parse(savedFavs));
+      }
+    } catch {}
+  }, []);
+
+  // Save favorites to local storage
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setFavorites((prev) =>
-      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
-    );
+    setFavorites((prev) => {
+      const updated = prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id];
+      try {
+        localStorage.setItem("crave_favorites", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Scroll Progress & Back to Top Tracker
+  useEffect(() => {
+    const handleScroll = () => {
+      const totalScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const currentScroll = window.scrollY;
+      const progress = totalScroll > 0 ? (currentScroll / totalScroll) * 100 : 0;
+      setScrollProgress(progress);
+      setShowBackToTop(currentScroll > 400);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // Cuisines list
@@ -118,10 +163,70 @@ export default function ExplorePage() {
     });
   }, [searchQuery, selectedMood, selectedCuisine, dietaryFilter, priceTier, sortBy]);
 
-  // Handle Surprise Me action
+  // Surprise Me Action
   const handleSurpriseMe = () => {
     const randomIndex = Math.floor(Math.random() * MENU_ITEMS.length);
     setSurpriseDish(MENU_ITEMS[randomIndex]);
+  };
+
+  // Food-to-Cart Flight Animation with Toast
+  const handleAddToCartWithFlight = (dish: MenuItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // 1. Add to actual Cart Context
+    const success = addItem(dish);
+    if (!success) return; // conflict modal will open
+
+    // 2. Trigger Flight Animation
+    const btn = e.currentTarget as HTMLElement;
+    const btnRect = btn.getBoundingClientRect();
+    const cartIconEl = cartIconRef?.current;
+    const cartRect = cartIconEl?.getBoundingClientRect();
+
+    const startX = btnRect.left + btnRect.width / 2 - 25;
+    const startY = btnRect.top + btnRect.height / 2 - 25;
+
+    const endX = cartRect ? cartRect.left + cartRect.width / 2 - 15 : window.innerWidth - 60;
+    const endY = cartRect ? cartRect.top + cartRect.height / 2 - 15 : 30;
+
+    const projectile = document.createElement("div");
+    projectile.className = "flying-projectile";
+    projectile.style.left = `${startX}px`;
+    projectile.style.top = `${startY}px`;
+    projectile.style.width = "50px";
+    projectile.style.height = "50px";
+    projectile.style.backgroundImage = `url('${dish.image}')`;
+    projectile.style.backgroundSize = "cover";
+    projectile.style.backgroundPosition = "center";
+    projectile.style.border = "2.5px solid #FF4D2D";
+    projectile.style.borderRadius = "9999px";
+    document.body.appendChild(projectile);
+
+    // Force layout reflow
+    projectile.getBoundingClientRect();
+
+    // Animate projectile along curved path
+    projectile.style.left = `${endX}px`;
+    projectile.style.top = `${endY}px`;
+    projectile.style.transform = "scale(0.25) rotate(360deg)";
+    projectile.style.opacity = "0.7";
+
+    setTimeout(() => {
+      if (projectile.parentNode) {
+        projectile.parentNode.removeChild(projectile);
+      }
+
+      // Bounce header cart button
+      if (cartIconEl) {
+        cartIconEl.classList.remove("animate-cart-bounce");
+        void cartIconEl.offsetWidth; // re-trigger
+        cartIconEl.classList.add("animate-cart-bounce");
+      }
+
+      // Show toast confirmation
+      setToastMessage(`Added "${dish.name}" to your cart!`);
+      setTimeout(() => setToastMessage(null), 2500);
+    }, 750);
   };
 
   const hasActiveFilters =
@@ -141,16 +246,47 @@ export default function ExplorePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] pb-24">
-      {/* Quick View Modal */}
+    <div className="min-h-screen bg-[#FAF8F5] pb-24 text-[#1A1715] font-sans selection:bg-[#FF4D2D] selection:text-white relative">
+      {/* 1. Page Scroll Progress Indicator */}
+      <div
+        className="fixed top-0 left-0 h-1 bg-gradient-to-r from-[#FF4D2D] to-[#FFA384] z-[100] transition-all duration-75 ease-out"
+        style={{ width: `${scrollProgress}%` }}
+        role="progressbar"
+        aria-valuenow={Math.round(scrollProgress)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      />
+
+      {/* 2. Floating Add-to-Cart Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#1A1715] text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+            <Check className="w-4 h-4 stroke-[3]" />
+          </div>
+          <span className="text-xs font-bold">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* 3. Floating Back to Top Button */}
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 left-6 z-40 p-3.5 rounded-full bg-[#1A1715] hover:bg-[#FF4D2D] text-white shadow-xl border border-white/10 transition-all duration-300 hover:scale-110 cursor-pointer group"
+          aria-label="Back to top"
+        >
+          <ArrowUp className="w-5 h-5 group-hover:-translate-y-0.5 transition-transform" />
+        </button>
+      )}
+
+      {/* 4. Quick View Modal */}
       <DishQuickViewModal
         dish={quickViewDish}
         onClose={() => setQuickViewDish(null)}
       />
 
-      {/* Surprise Me Modal */}
+      {/* 5. Surprise Me Modal */}
       {surpriseDish && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-[#FAF8F5] rounded-3xl p-6 shadow-2xl border border-[#EBE5DF] text-center space-y-4 animate-in zoom-in-95">
             <div className="w-16 h-16 rounded-3xl bg-[#FFF1EE] text-[#FF4D2D] mx-auto flex items-center justify-center">
               <Sparkles className="w-8 h-8" />
@@ -171,16 +307,16 @@ export default function ExplorePage() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setSurpriseDish(null)}
-                className="flex-1 py-3 rounded-2xl border border-[#E5DDD4] font-semibold text-xs text-[#1A1715]"
+                className="flex-1 py-3 rounded-2xl border border-[#E5DDD4] font-semibold text-xs text-[#1A1715] hover:bg-[#F3EFEA] transition-colors cursor-pointer"
               >
                 Close
               </button>
               <button
-                onClick={() => {
-                  addItem(surpriseDish);
+                onClick={(e) => {
+                  handleAddToCartWithFlight(surpriseDish, e);
                   setSurpriseDish(null);
                 }}
-                className="flex-1 py-3 rounded-2xl bg-[#FF4D2D] text-white font-bold text-xs hover:bg-[#E03A1A]"
+                className="flex-1 py-3 rounded-2xl bg-[#FF4D2D] text-white font-bold text-xs hover:bg-[#E03A1A] transition-colors cursor-pointer shadow-md"
               >
                 Add to Cart • ₹{surpriseDish.price}
               </button>
@@ -191,17 +327,17 @@ export default function ExplorePage() {
 
       {/* SECTION 1: CINEMATIC FOOD HERO */}
       <section className="relative overflow-hidden bg-[#140E0A] text-white pt-16 pb-20 sm:pb-28 border-b border-[#2A1F18]">
-        {/* Subtle Warm Background Glow */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#FF4D2D]/15 blur-[120px] rounded-full pointer-events-none" />
+        {/* Warm Ambient Glow */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#FF4D2D]/15 blur-[130px] rounded-full pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            {/* Left Headline & Pitch */}
+            {/* Left Headline & Action Pitch */}
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1C1511] border border-[#2A1F18] text-xs text-[#E5DDD4]">
                 <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-ping" />
                 <span className="font-semibold text-white">Live in 6 Major Metros</span>
-                <span className="text-[#A3988E]">| 28 States Mapped</span>
+                <span className="text-[#A3988E]">| 28 States & 8 UTs Mapped</span>
               </div>
 
               <div className="space-y-2">
@@ -279,9 +415,9 @@ export default function ExplorePage() {
         </div>
       </section>
 
-      {/* SECTION 2 & 3: INSTANT SEARCH & MOOD-TO-MEAL */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-20 space-y-8">
-        {/* Search Bar Input */}
+      {/* SECTION 2: SEARCH & MULTI-FACET FILTER CONTROLS */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-20 space-y-6">
+        {/* Instant Search Bar */}
         <div className="bg-white rounded-3xl p-3 shadow-xl border border-[#EBE5DF] flex items-center gap-3">
           <div className="p-3 rounded-2xl bg-[#FFF1EE] text-[#FF4D2D] shrink-0">
             <Search className="w-5 h-5" />
@@ -290,56 +426,21 @@ export default function ExplorePage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by dish name, artisan kitchen, or cuisine (e.g. Wagyu Burger, Truffle Pizza, Awadhi Biryani)..."
+            placeholder="Search by dish name, artisan kitchen, or cuisine (e.g. Wagyu Burger, Truffle Pizza, Dum Biryani)..."
             className="flex-1 bg-transparent text-[#1A1715] placeholder-[#9E948C] text-sm sm:text-base outline-none font-medium"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="p-2 text-[#9E948C] hover:text-[#1A1715]"
+              className="p-2 text-[#9E948C] hover:text-[#1A1715] cursor-pointer"
+              aria-label="Clear search query"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Mood-to-Meal Horizontal Selector */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#766E65]">
-              Mood-to-Meal Discovery
-            </span>
-            {selectedMood !== "all" && (
-              <button
-                onClick={() => setSelectedMood("all")}
-                className="text-xs font-semibold text-[#FF4D2D] hover:underline"
-              >
-                Reset mood
-              </button>
-            )}
-          </div>
-
-          <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none">
-            {MOOD_CATEGORIES.map((mood) => {
-              const isSelected = selectedMood === mood.id;
-              return (
-                <button
-                  key={mood.id}
-                  onClick={() => setSelectedMood(mood.id)}
-                  className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer border ${
-                    isSelected
-                      ? "bg-[#1A1715] text-white border-[#1A1715] shadow-md scale-105"
-                      : "bg-white text-[#665E57] border-[#EBE5DF] hover:border-[#D5CDC4] hover:text-[#1A1715]"
-                  }`}
-                >
-                  <span>{mood.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* SECTION 4: MULTI-FACET FILTER CONTROLS */}
+        {/* Filter Bar */}
         <div className="bg-white rounded-3xl p-5 border border-[#EBE5DF] shadow-2xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-[#1A1715] font-bold text-sm">
@@ -350,7 +451,7 @@ export default function ExplorePage() {
             {hasActiveFilters && (
               <button
                 onClick={resetAllFilters}
-                className="text-xs font-bold text-[#FF4D2D] hover:underline flex items-center gap-1"
+                className="text-xs font-bold text-[#FF4D2D] hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>Clear All Filters</span>
@@ -366,8 +467,8 @@ export default function ExplorePage() {
               </label>
               <select
                 value={dietaryFilter}
-                onChange={(e) => setDietaryFilter(e.target.value as any)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#E5DDD4] text-xs font-semibold text-[#1A1715]"
+                onChange={(e) => setDietaryFilter(e.target.value as "all" | "veg" | "non-veg" | "vegan")}
+                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#E5DDD4] text-xs font-semibold text-[#1A1715] focus:outline-none focus:border-[#FF4D2D]"
               >
                 <option value="all">All Diets</option>
                 <option value="veg">Pure Vegetarian</option>
@@ -384,7 +485,7 @@ export default function ExplorePage() {
               <select
                 value={selectedCuisine}
                 onChange={(e) => setSelectedCuisine(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#E5DDD4] text-xs font-semibold text-[#1A1715]"
+                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#E5DDD4] text-xs font-semibold text-[#1A1715] focus:outline-none focus:border-[#FF4D2D]"
               >
                 <option value="all">All Cuisines</option>
                 {availableCuisines.map((c) => (
@@ -393,15 +494,15 @@ export default function ExplorePage() {
               </select>
             </div>
 
-            {/* Price Range */}
+            {/* Price Tier Filter */}
             <div>
               <label className="block text-[11px] font-bold text-[#766E65] uppercase tracking-wider mb-1">
                 Price Budget
               </label>
               <select
                 value={priceTier}
-                onChange={(e) => setPriceTier(e.target.value as any)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#E5DDD4] text-xs font-semibold text-[#1A1715]"
+                onChange={(e) => setPriceTier(e.target.value as "all" | "under200" | "mid" | "premium")}
+                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#E5DDD4] text-xs font-semibold text-[#1A1715] focus:outline-none focus:border-[#FF4D2D]"
               >
                 <option value="all">Any Price</option>
                 <option value="under200">Under ₹200 (Bites & Tarts)</option>
@@ -410,15 +511,15 @@ export default function ExplorePage() {
               </select>
             </div>
 
-            {/* Sorting */}
+            {/* Sort Options */}
             <div>
               <label className="block text-[11px] font-bold text-[#766E65] uppercase tracking-wider mb-1">
                 Sort By
               </label>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#E5DDD4] text-xs font-semibold text-[#1A1715]"
+                onChange={(e) => setSortBy(e.target.value as "rating" | "time" | "price_asc" | "price_desc")}
+                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#E5DDD4] text-xs font-semibold text-[#1A1715] focus:outline-none focus:border-[#FF4D2D]"
               >
                 <option value="rating">Highest Rated (4.8+)</option>
                 <option value="time">Fastest Preparation</option>
@@ -430,8 +531,160 @@ export default function ExplorePage() {
         </div>
       </section>
 
-      {/* SECTION 5: PERSONALIZED COLLECTIONS ROW */}
+      {/* SECTION 3: MOOD-TO-MEAL ANIMATED DISCOVERY */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-14 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF1EE] text-[#FF4D2D] text-xs font-bold uppercase tracking-wider">
+              <Compass className="w-3.5 h-3.5" />
+              <span>Taste Discovery</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-[#1A1715] mt-1">
+              WHAT ARE WE CRAVING TODAY?
+            </h2>
+            <p className="text-xs text-[#766E65] mt-0.5">
+              Select an emotional craving to instantly personalize your dish recommendations
+            </p>
+          </div>
+
+          {selectedMood !== "all" && (
+            <button
+              onClick={() => setSelectedMood("all")}
+              className="text-xs font-bold text-[#FF4D2D] hover:underline flex items-center gap-1"
+            >
+              <span>Reset Mood Filter ({selectedMood})</span>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* 6 Mood Cards with Distinctive Micro-Animations */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+          {[
+            {
+              id: "comfort",
+              title: "Comfort Food",
+              desc: "Burgers & Dum Pots",
+              icon: Heart,
+              color: "text-amber-500",
+              bgColor: "bg-amber-50/60 hover:bg-amber-100/80 border-amber-200",
+              badge: "Gentle warmth",
+            },
+            {
+              id: "spicy",
+              title: "Spicy Cravings",
+              desc: "Ghost Pepper & Chili",
+              icon: Flame,
+              color: "text-red-500",
+              bgColor: "bg-red-50/60 hover:bg-red-100/80 border-red-200",
+              badge: "Fiery punch",
+            },
+            {
+              id: "fresh",
+              title: "Fresh & Light",
+              desc: "Organic Clean Bowls",
+              icon: Leaf,
+              color: "text-emerald-500",
+              bgColor: "bg-emerald-50/60 hover:bg-emerald-100/80 border-emerald-200",
+              badge: "Farm fresh",
+            },
+            {
+              id: "cheesy",
+              title: "Cheesy Goodness",
+              desc: "Woodfired 4-Cheese",
+              icon: Layers,
+              color: "text-yellow-600",
+              bgColor: "bg-yellow-50/60 hover:bg-yellow-100/80 border-yellow-200",
+              badge: "Melted perfection",
+            },
+            {
+              id: "sweet",
+              title: "Sweet Escape",
+              desc: "Chocolate & Tarts",
+              icon: Sparkles,
+              color: "text-purple-500",
+              bgColor: "bg-purple-50/60 hover:bg-purple-100/80 border-purple-200",
+              badge: "Pure bliss",
+            },
+            {
+              id: "quick",
+              title: "Quick Hunger Fix",
+              desc: "Under 15 Mins",
+              icon: Zap,
+              color: "text-sky-500",
+              bgColor: "bg-sky-50/60 hover:bg-sky-100/80 border-sky-200",
+              badge: "Express prep",
+            },
+          ].map((mood) => {
+            const isSelected = selectedMood === mood.id;
+            const Icon = mood.icon;
+
+            return (
+              <button
+                key={mood.id}
+                onClick={() => {
+                  setSelectedMood(isSelected ? "all" : mood.id);
+                  // Scroll smoothly to food grid when selected
+                  const gridEl = document.getElementById("food-grid");
+                  if (gridEl) {
+                    gridEl.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+                className={`p-4 rounded-3xl border text-left transition-all duration-300 flex flex-col justify-between h-36 cursor-pointer group relative overflow-hidden ${
+                  isSelected
+                    ? "bg-[#1A1715] text-white border-[#1A1715] shadow-xl scale-105"
+                    : `${mood.bgColor} text-[#1A1715] hover:scale-102 hover:shadow-md`
+                }`}
+              >
+                {/* Micro accent corner */}
+                <div className="flex items-center justify-between w-full">
+                  <div
+                    className={`p-2 rounded-2xl ${
+                      isSelected ? "bg-white/20 text-white" : "bg-white shadow-xs"
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isSelected ? "text-white" : mood.color}`} />
+                  </div>
+                  <span
+                    className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      isSelected ? "bg-[#FF4D2D] text-white" : "bg-white/80 text-[#766E65]"
+                    }`}
+                  >
+                    {mood.badge}
+                  </span>
+                </div>
+
+                <div>
+                  <h4 className="text-xs sm:text-sm font-black line-clamp-1">{mood.title}</h4>
+                  <p
+                    className={`text-[10px] mt-0.5 line-clamp-1 ${
+                      isSelected ? "text-white/70" : "text-[#766E65]"
+                    }`}
+                  >
+                    {mood.desc}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* SECTION 4: SCROLL-DRIVEN HORIZONTAL FOOD GALLERY */}
+      <div className="mt-20">
+        <HorizontalFoodGallery
+          onQuickView={(dish) => setQuickViewDish(dish)}
+          onAddToCart={handleAddToCartWithFlight}
+        />
+      </div>
+
+      {/* SECTION 5: CRAVE SIGNATURE 3D BURGER ASSEMBLY REVEAL */}
+      <div className="mt-0">
+        <ScrollBurger3D />
+      </div>
+
+      {/* SECTION 6: CURATED THEMATIC COLLECTIONS */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20 space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-[#1A1715]">
@@ -457,30 +710,30 @@ export default function ExplorePage() {
               count: "6 Dishes",
               desc: "Trending favorites in your locality",
               action: () => resetAllFilters(),
-              bg: "from-[#FF4D2D] to-[#E03A1A]"
+              bg: "from-[#FF4D2D] to-[#E03A1A]",
             },
             {
               title: "Hidden Gems",
               count: "4 Kitchens",
               desc: "Independent culinary artisans",
               action: () => setSelectedCuisine("Pan-Asian"),
-              bg: "from-[#1A1715] to-[#2D2622]"
+              bg: "from-[#1A1715] to-[#2D2622]",
             },
             {
               title: "Under ₹200",
               count: "Quick Bites",
               desc: "Artisanal croissants, tarts & fries",
               action: () => setPriceTier("under200"),
-              bg: "from-[#15803D] to-[#166534]"
+              bg: "from-[#15803D] to-[#166534]",
             },
             {
               title: "Interactive 3D",
               count: "Flagship",
               desc: "Wagyu burger customizable in 3D",
               href: "/studio",
-              bg: "from-[#3B2014] to-[#140E0A]"
-            }
-          ].map((col, idx) => (
+              bg: "from-[#3B2014] to-[#140E0A]",
+            },
+          ].map((col, idx) =>
             col.href ? (
               <Link
                 key={idx}
@@ -518,24 +771,33 @@ export default function ExplorePage() {
                 </div>
               </div>
             )
-          ))}
+          )}
         </div>
       </section>
 
-      {/* SECTION 6 & 9: MAIN FOOD GRID */}
-      <section id="food-grid" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 space-y-6">
-        <div className="flex items-center justify-between border-b border-[#EBE5DF] pb-4">
-          <div>
-            <h2 className="text-2xl font-black text-[#1A1715]">
-              Dishes for You
-            </h2>
-            <p className="text-xs text-[#766E65] mt-0.5">
-              Showing {filteredDishes.length} curated recipes matching your preferences
-            </p>
-          </div>
+      {/* SECTION 7: MAIN CINEMATIC FOOD GRID */}
+      <section id="food-grid" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20 space-y-6">
+        {/* Section Heading with Animated Orange Accent Line */}
+        <div className="border-b border-[#EBE5DF] pb-5">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-[#FF4D2D] uppercase tracking-wider">
+                  Menu Discoveries
+                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#FF4D2D]"></span>
+                <span className="text-xs text-[#766E65]">Verified Kitchens</span>
+              </div>
+              <h2 className="text-2xl sm:text-4xl font-black text-[#1A1715] mt-1 font-sans">
+                Dishes for You
+              </h2>
+              {/* Expanding Accent Line */}
+              <div className="w-20 h-1 bg-[#FF4D2D] rounded-full mt-2 transition-all duration-500 ease-out" />
+            </div>
 
-          <div className="text-xs text-[#766E65] font-semibold">
-            {filteredDishes.length} Results
+            <div className="text-xs font-bold text-[#766E65] bg-white px-3 py-1.5 rounded-xl border border-[#EBE5DF]">
+              Showing <span className="text-[#FF4D2D] font-black">{filteredDishes.length}</span> curated recipes
+            </div>
           </div>
         </div>
 
@@ -549,81 +811,87 @@ export default function ExplorePage() {
             </p>
             <button
               onClick={resetAllFilters}
-              className="mt-3 px-5 py-2.5 rounded-2xl bg-[#FF4D2D] text-white font-bold text-xs"
+              className="mt-3 px-5 py-2.5 rounded-2xl bg-[#FF4D2D] text-white font-bold text-xs hover:bg-[#E03A1A] transition-colors cursor-pointer"
             >
-              Reset Filters
+              Reset All Filters
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          /* Staggered Food Grid */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7">
             {filteredDishes.map((dish) => {
               const isFav = favorites.includes(dish.id);
+
               return (
                 <div
                   key={dish.id}
-                  className="group rounded-3xl bg-white border border-[#EBE5DF] hover:border-[#D5CDC4] shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between"
+                  className="group rounded-3xl bg-white border border-[#EBE5DF] hover:border-[#D5CDC4] shadow-xs hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden flex flex-col justify-between"
                 >
                   <div>
-                    {/* Image Container with Badges */}
-                    <div className="relative h-56 w-full overflow-hidden bg-[#F3EFEA]">
+                    {/* Food Image Stage with Hover Zoom */}
+                    <div className="relative h-60 w-full overflow-hidden bg-[#F3EFEA]">
                       <Image
                         src={dish.image}
                         alt={dish.name}
                         fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        className="object-cover group-hover:scale-108 transition-transform duration-600 ease-out"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 opacity-90" />
 
                       {/* Top Badges */}
-                      <div className="absolute top-3 left-3 flex items-center gap-2">
+                      <div className="absolute top-3.5 left-3.5 flex items-center gap-2">
                         {dish.dietary === "veg" ? (
-                          <span className="w-5 h-5 rounded-md bg-white/90 backdrop-blur-xs flex items-center justify-center border border-[#16A34A]">
+                          <span className="w-6 h-6 rounded-lg bg-white/95 backdrop-blur-md flex items-center justify-center border border-[#16A34A] shadow-xs">
                             <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A]" />
                           </span>
                         ) : dish.dietary === "vegan" ? (
-                          <span className="px-2 py-0.5 rounded-md bg-[#16A34A] text-white text-[10px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-[#16A34A] text-white text-[10px] font-bold shadow-xs">
                             VEGAN
                           </span>
                         ) : (
-                          <span className="w-5 h-5 rounded-md bg-white/90 backdrop-blur-xs flex items-center justify-center border border-[#DC2626]">
+                          <span className="w-6 h-6 rounded-lg bg-white/95 backdrop-blur-md flex items-center justify-center border border-[#DC2626] shadow-xs">
                             <span className="w-2.5 h-2.5 rounded-full bg-[#DC2626]" />
                           </span>
                         )}
 
                         {dish.studioEnabled && (
-                          <span className="px-2 py-0.5 rounded-md bg-[#FF4D2D] text-white text-[10px] font-bold flex items-center gap-1">
+                          <span className="px-2.5 py-1 rounded-lg bg-[#FF4D2D] text-white text-[10px] font-black tracking-wider flex items-center gap-1 shadow-md">
                             <Layers className="w-3 h-3" />
-                            3D Studio
+                            3D STUDIO
                           </span>
                         )}
                       </div>
 
-                      {/* Favorite & Quick View Buttons */}
-                      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                      {/* Favorite & Quick View Action Buttons */}
+                      <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5">
                         <button
                           onClick={(e) => toggleFavorite(dish.id, e)}
-                          className="p-2 rounded-full bg-white/90 backdrop-blur-xs text-[#1A1715] hover:text-[#FF4D2D] transition-colors"
+                          className="p-2 rounded-full bg-white/90 backdrop-blur-md text-[#1A1715] hover:text-[#FF4D2D] transition-colors shadow-xs cursor-pointer active:scale-90"
                           aria-label="Add to favorites"
                         >
                           <Heart
-                            className={`w-4 h-4 ${isFav ? "fill-[#FF4D2D] text-[#FF4D2D]" : ""}`}
+                            className={`w-4 h-4 ${
+                              isFav ? "fill-[#FF4D2D] text-[#FF4D2D]" : ""
+                            }`}
                           />
                         </button>
 
                         <button
                           onClick={() => setQuickViewDish(dish)}
-                          className="p-2 rounded-full bg-white/90 backdrop-blur-xs text-[#1A1715] hover:text-[#FF4D2D] transition-colors"
+                          className="p-2 rounded-full bg-white/90 backdrop-blur-md text-[#1A1715] hover:text-[#FF4D2D] transition-colors shadow-xs cursor-pointer active:scale-90"
                           aria-label="Quick view dish"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                       </div>
 
-                      {/* Bottom Info on Image */}
-                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs font-semibold">
-                        <span className="truncate max-w-[200px]">{dish.restaurantName}</span>
-                        <div className="flex items-center gap-1 bg-black/50 backdrop-blur-xs px-2 py-0.5 rounded-md">
-                          <Star className="w-3 h-3 fill-[#FFD700] text-[#FFD700]" />
+                      {/* Bottom Kitchen & Rating Bar on Image */}
+                      <div className="absolute bottom-3.5 left-3.5 right-3.5 flex items-center justify-between text-white text-xs font-semibold">
+                        <span className="truncate max-w-[200px] text-[#FAF8F5] drop-shadow-xs">
+                          {dish.restaurantName}
+                        </span>
+                        <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 text-[#FFD700]">
+                          <Star className="w-3 h-3 fill-[#FFD700]" />
                           <span>{dish.rating}</span>
                         </div>
                       </div>
@@ -641,16 +909,16 @@ export default function ExplorePage() {
                       </p>
 
                       <div className="flex items-center gap-3 text-[11px] text-[#9E948C] pt-1">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
+                        <span className="flex items-center gap-1 text-[#554C43]">
+                          <Clock className="w-3 h-3 text-[#FF4D2D]" />
                           {dish.prepTimeMinutes} mins
                         </span>
                         <span>•</span>
-                        <span>{dish.calories || 520} kcal</span>
+                        <span className="text-[#554C43]">{dish.calories || 520} kcal</span>
                         {dish.spiceLevel && dish.spiceLevel > 1 && (
                           <>
                             <span>•</span>
-                            <span className="flex items-center gap-0.5 text-[#DC2626]">
+                            <span className="flex items-center gap-0.5 text-[#DC2626] font-semibold">
                               <Flame className="w-3 h-3" />
                               Spicy
                             </span>
@@ -660,11 +928,11 @@ export default function ExplorePage() {
                     </div>
                   </div>
 
-                  {/* Price & Add Action Footer */}
+                  {/* Price & Add to Cart Footer */}
                   <div className="px-5 pb-5 pt-3 border-t border-[#F3EFEA] flex items-center justify-between">
                     <div>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-lg font-black text-[#1A1715]">₹{dish.price}</span>
+                        <span className="text-xl font-black text-[#1A1715]">₹{dish.price}</span>
                         {dish.originalPrice && (
                           <span className="text-xs text-[#9E948C] line-through">
                             ₹{dish.originalPrice}
@@ -678,7 +946,7 @@ export default function ExplorePage() {
                       {dish.studioEnabled ? (
                         <Link
                           href="/studio"
-                          className="px-3 py-2 rounded-xl bg-[#1A1715] text-white text-xs font-bold hover:bg-black transition-colors flex items-center gap-1.5"
+                          className="px-3 py-2 rounded-xl bg-[#1A1715] hover:bg-black text-white text-xs font-bold transition-colors flex items-center gap-1.5"
                         >
                           <Layers className="w-3.5 h-3.5 text-[#FF4D2D]" />
                           <span>3D</span>
@@ -686,10 +954,10 @@ export default function ExplorePage() {
                       ) : null}
 
                       <button
-                        onClick={() => addItem(dish)}
-                        className="px-3.5 py-2 rounded-xl bg-[#FF4D2D] hover:bg-[#E03A1A] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                        onClick={(e) => handleAddToCartWithFlight(dish, e)}
+                        className="px-4 py-2 rounded-xl bg-[#FF4D2D] hover:bg-[#E03A1A] text-white text-xs font-black shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                       >
-                        <Plus className="w-3.5 h-3.5" />
+                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
                         <span>Add</span>
                       </button>
                     </div>
