@@ -22,7 +22,10 @@ export const RESTAURANTS_DATA: Restaurant[] = [
     isOpen: true,
     safetyRating: 4.9,
     featuredDishes: ["dish-burger-1", "dish-burger-2", "dish-fries-1"],
-    offers: ["20% OFF up to ₹120 with CRAVEFIRST", "Free Truffle Dip on orders above ₹600"]
+    offers: ["20% OFF up to ₹120 with CRAVEFIRST", "Free Truffle Dip on orders above ₹600"],
+    lat: 19.0596,
+    lng: 72.8295,
+    distanceKm: 2.1
   },
   {
     id: "rst-2",
@@ -45,7 +48,10 @@ export const RESTAURANTS_DATA: Restaurant[] = [
     isOpen: true,
     safetyRating: 5.0,
     featuredDishes: ["dish-pizza-1", "dish-pizza-2", "dish-pasta-1"],
-    offers: ["Flat ₹100 OFF with SUPER100", "Complimentary Garlic Focaccia above ₹800"]
+    offers: ["Flat ₹100 OFF with SUPER100", "Complimentary Garlic Focaccia above ₹800"],
+    lat: 12.9784,
+    lng: 77.6408,
+    distanceKm: 3.4
   },
   {
     id: "rst-3",
@@ -68,7 +74,10 @@ export const RESTAURANTS_DATA: Restaurant[] = [
     isOpen: true,
     safetyRating: 4.8,
     featuredDishes: ["dish-biryani-1", "dish-biryani-2", "dish-kebab-1"],
-    offers: ["20% OFF on all Dum Pots", "Special Raita & Salan included"]
+    offers: ["20% OFF on all Dum Pots", "Special Raita & Salan included"],
+    lat: 17.4156,
+    lng: 78.4354,
+    distanceKm: 4.2
   },
   {
     id: "rst-4",
@@ -91,7 +100,10 @@ export const RESTAURANTS_DATA: Restaurant[] = [
     isOpen: true,
     safetyRating: 4.9,
     featuredDishes: ["dish-bao-1", "dish-dimsum-1", "dish-ramen-1"],
-    offers: ["15% OFF on Steamed Platters", "Free Jasmine Tea Flask above ₹750"]
+    offers: ["15% OFF on Steamed Platters", "Free Jasmine Tea Flask above ₹750"],
+    lat: 18.5362,
+    lng: 73.8940,
+    distanceKm: 1.8
   },
   {
     id: "rst-5",
@@ -114,7 +126,10 @@ export const RESTAURANTS_DATA: Restaurant[] = [
     isOpen: true,
     safetyRating: 5.0,
     featuredDishes: ["dish-bowl-1", "dish-bowl-2", "dish-smoothie-1"],
-    offers: ["Free Cold-Pressed Juice on First Order", "10% OFF on Protein Combos"]
+    offers: ["Free Cold-Pressed Juice on First Order", "10% OFF on Protein Combos"],
+    lat: 28.5733,
+    lng: 77.2343,
+    distanceKm: 2.8
   },
   {
     id: "rst-6",
@@ -137,7 +152,10 @@ export const RESTAURANTS_DATA: Restaurant[] = [
     isOpen: true,
     safetyRating: 5.0,
     featuredDishes: ["dish-dessert-1", "dish-dessert-2", "dish-croissant-1"],
-    offers: ["Buy 2 Artisanal Tarts Get 1 Free", "CRAVE Dessert Club Exclusive Perks"]
+    offers: ["Buy 2 Artisanal Tarts Get 1 Free", "CRAVE Dessert Club Exclusive Perks"],
+    lat: 28.4952,
+    lng: 77.0890,
+    distanceKm: 3.1
   }
 ];
 

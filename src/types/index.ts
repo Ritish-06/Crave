@@ -81,6 +81,9 @@ export interface Restaurant {
   safetyRating: number;
   featuredDishes: string[];
   offers: string[];
+  lat?: number;
+  lng?: number;
+  distanceKm?: number;
 }
 
 export interface BurgerCustomizationState {
