@@ -88,8 +88,10 @@ export interface Restaurant {
 
 export interface BurgerCustomizationState {
   bun: 'brioche' | 'sesame' | 'charcoal' | 'gluten-free';
+  bunToastLevel?: 1 | 2 | 3 | 4;
   pattyCount: 1 | 2 | 3;
   pattyType: 'wagyu' | 'crispy-chicken' | 'plant-protein' | 'paneer-steak';
+  pattyDoneness?: 'medium-rare' | 'medium-well' | 'crispy-smash';
   cheese: 'cheddar' | 'swiss-gouda' | 'smoked-provolone' | 'none';
   veggies: {
     lettuce: boolean;
@@ -104,6 +106,7 @@ export interface BurgerCustomizationState {
     craveSpecial: boolean;
     ghostPepper: boolean;
   };
+  sauceDrizzleIntensity?: 'subtle' | 'generous' | 'volcano';
   extras: {
     caramelizedOnions: boolean;
     friedEgg: boolean;
