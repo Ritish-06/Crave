@@ -8,9 +8,14 @@ CRAVE is a full-stack, modular monolith food platform engineered with **Next.js 
 
 ## 🌟 Key Platform Capabilities
 
-### 1. 🎨 Procedural 3D Dish Studio (`/studio`)
+### 1. 🎨 Procedural 3D Dish Studio & AR QuickLook (`/studio`)
 - **Interactive WebGL Engine**: Direct Three.js PBR procedural shaders rendering customizable brioche buns, smashed wagyu patties, melted cheeses, farm-fresh veggies, and gourmet sauces.
-- **Exploded vs. Assembled Views**: Inspect every layer vertically or assemble into a finished smash burger.
+- **Dynamic Bun Toasting Controls**: 4-level procedural toast engine (*Soft Warm, Artisan Golden, Caramelized Butter, Charred Rustic*) generating realistic toast rings and grill marks on bun cuts.
+- **Realistic Patty Textures & Doneness**: Multi-craft patty selection (*Japanese Wagyu, Crispy Buttermilk Chicken, Plant-Protein, Paneer Cottage Steak*) with procedural bump maps, searing crust lines, and doneness options (*Medium Rare, Medium Well, Crispy Smashed*).
+- **Live 3D Sauce Drizzle Layer**: Real-time glossy 3D ribbons and dripping beads over patties (*Crave Black Truffle Aioli, Smoked Chipotle BBQ Glaze, Fiery Bhut Jolokia Glaze, Crave Secret Sauce*).
+- **Four Cinematic Camera Presets**: One-click smooth camera interpolation for *Hero View*, *Isometric 3/4*, *Top-Down Stack*, and *Macro Patty Zoom*.
+- **Augmented Reality (AR) Preview Modal**: Branded scannable AR QR code for 1:1 life-size placement on mobile (iOS AR QuickLook & Android WebXR) plus an interactive **Desktop AR Tabletop Simulator** with ambient lighting controls (Warm Dining 3200K, Daylight 5500K, Night Lounge).
+- **Exploded vs. Assembled Views**: Inspect every layer vertically with interactive layer jumpers or assemble into a finished smash burger.
 - **Cinematic Parabolic Flight**: Adding dishes animates a flying projectile across the screen directly into the navigation cart.
 
 ### 2. 🎬 Cinematic Explore Experience (`/explore`)
