@@ -18,11 +18,16 @@ CRAVE is a full-stack, modular monolith food platform engineered with **Next.js 
 - **Exploded vs. Assembled Views**: Inspect every layer vertically with interactive layer jumpers or assemble into a finished smash burger.
 - **Cinematic Parabolic Flight**: Adding dishes animates a flying projectile across the screen directly into the navigation cart.
 
-### 2. 🎬 Cinematic Explore Experience (`/explore`)
-- **Scroll-Driven Horizontal Food Gallery**: Pinned editorial gallery using **GSAP ScrollTrigger** transitioning horizontal cards on vertical scroll.
-- **Signature 3D Burger Assembly Reveal**: Interactive Three.js burger that assembles dynamically as the user scrolls into view.
-- **Mood-to-Meal Discovery**: Emotional craving cards (*Comfort Food, Spicy Cravings, Fresh & Light, Cheesy Goodness, Sweet Escape, Quick Hunger Fix*) with instant live food filtering.
-- **Interactive Food Cards**: Hover zoom, card elevation, persistent favorites, quick-view modal, and authoritative pricing.
+### 2. 🎬 Visual Food Discovery & Editorial Explore (`/explore`)
+- **Editorial Cinematic Hero**: "Your Next Craving Starts Here" with integrated search, layered food photography, floating rating & time badges, and direct CTAs.
+- **Mood-to-Meal Engine**: 7 interactive emotional craving cards (*Comfort Mode, Need Something Spicy, Light & Fresh, Sweet Escape, Midnight Cravings, Treat Yourself, Local Favourites*) with transparent rule-based filtering on live menu data.
+- **Dish-First Discovery Grid**: "Find the Dish. Discover the Place." featuring dish photographs, verified ratings, delivery speed, dietary indicators, 3D studio tags, quick view modal, and parabolic food flight animations.
+- **Cross-Kitchen Dish Comparison**: Side-by-side spec comparison matrix for burgers, biryanis, pizzas, and desserts across partner kitchens with direct Add-to-Cart.
+- **Food Passport ("Your Passport to Flavour")**: Interactive cuisine cards across 8 world and regional Indian culinary traditions with a persistent stamp progress tracker.
+- **Interactive 3D Dish Studio Showcase**: Scroll-driven Three.js burger assembly reveal coupled with pinned GSAP horizontal showstopper gallery and direct Studio launch CTA.
+- **Surprise My Cravings Modal**: Deterministic recommendation engine matching custom budget, dietary preferences, and cuisines with "Try Another" shuffle and instant cart addition.
+- **CRAVE Food Radar**: Hyperlocal logistics radar plotting verified kitchens across Indian metro hubs with prep times, FSSAI audits, and free delivery thresholds.
+- **CRAVE Food Stories**: Editorial magazine cards detailing chef craft, 72-hour sourdough fermentation, Awadhi sealed dum pots, and Valrhona chocolate tempering.
 
 ### 3. 🇮🇳 India-Wide Location Engine
 - **Full Administrative Hierarchy**: Indexes all **28 States and 8 Union Territories** across 780+ official districts.
