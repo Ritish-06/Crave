@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import confetti from "canvas-confetti";
 import {
   Clock,
   CheckCircle2,
@@ -13,15 +14,106 @@ import {
   MapPin,
   Sparkles,
   ArrowRight,
-  RotateCw
+  RotateCw,
+  Heart,
+  MessageSquare,
+  Volume2,
+  VolumeX,
+  KeyRound,
+  Download,
+  AlertCircle
 } from "lucide-react";
 import { OrderRecord } from "@/types";
+import { DeliveryRadarMap } from "@/components/tracker/DeliveryRadarMap";
+import { DeliveryOtpModal } from "@/components/tracker/DeliveryOtpModal";
+import { CourierTipModal } from "@/components/tracker/CourierTipModal";
+import { OrderSupportDrawer } from "@/components/tracker/OrderSupportDrawer";
 
 export default function LiveTrackerPage() {
   const [activeOrder, setActiveOrder] = useState<OrderRecord | null>(null);
-  const [timelineStep, setTimelineStep] = useState<number>(3); // 1: Confirmed, 2: Preparing, 3: Out for delivery, 4: Delivered
   const [progressPercent, setProgressPercent] = useState(65);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+  const [isTipModalOpen, setIsTipModalOpen] = useState(false);
+  const [isSupportDrawerOpen, setIsSupportDrawerOpen] = useState(false);
+  const [tipAmount, setTipAmount] = useState(30);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const deliveryOtp = "7842";
+  const courierName = activeOrder?.riderName || "Vikram R. (CRAVE Courier Partner)";
+  const courierPhone = activeOrder?.riderPhone || "+919845011234";
+  const restaurantName = activeOrder?.restaurantName || "The Truffle & Brioche Co.";
+  const orderNumber = activeOrder?.orderNumber || "CRV-894210";
+
+  // Synthesizer Web Audio API for harmonic milestone chimes (Zero bundle bloat)
+  const playAudioChime = (type: "confirm" | "dispatch" | "delivered") => {
+    if (!soundEnabled || typeof window === "undefined") return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      const freqs =
+        type === "delivered"
+          ? [523.25, 659.25, 783.99, 1046.5] // C5, E5, G5, C6 (Celebration chord)
+          : type === "dispatch"
+          ? [440.0, 554.37, 659.25] // A4, C#5, E5
+          : [392.0, 523.25]; // G4, C5
+
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.12);
+
+        gain.gain.setValueAtTime(0.08, ctx.currentTime + idx * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.12 + 0.35);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + idx * 0.12);
+        osc.stop(ctx.currentTime + idx * 0.12 + 0.4);
+      });
+    } catch {}
+  };
+
+  // Determine timeline step based on progress
+  const timelineStep =
+    progressPercent < 25 ? 1 : progressPercent < 50 ? 2 : progressPercent < 95 ? 3 : 4;
+
+  // Auto-play simulation interval
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (isPlaying) {
+      interval = setInterval(() => {
+        setProgressPercent((prev) => {
+          const next = prev + 0.4 * playbackSpeed;
+          if (next >= 100) {
+            setIsPlaying(false);
+            playAudioChime("delivered");
+            confetti({
+              particleCount: 50,
+              spread: 60,
+              origin: { y: 0.6 }
+            });
+            return 100;
+          }
+          return next;
+        });
+      }, 100);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPlaying, playbackSpeed]);
+
+  // Load active or recent order from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem("crave_active_order");
@@ -44,122 +136,227 @@ export default function LiveTrackerPage() {
     { id: 4, title: "Delivered", desc: "Enjoy every bite!", icon: Sparkles }
   ];
 
+  const handleVerifySuccess = () => {
+    setProgressPercent(100);
+    setIsPlaying(false);
+    playAudioChime("delivered");
+    setToastMessage("Parcel handover verified! Thank you for choosing CRAVE.");
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleApplyTip = (amount: number) => {
+    setTipAmount(amount);
+    if (amount > 0) {
+      setToastMessage(`Added ₹${amount} tip for ${courierName}! ❤️`);
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
+  // Computed subtotal and totals
+  const subtotal = activeOrder?.subtotal || (activeOrder?.total ? activeOrder.total - 25 - Math.round(activeOrder.total * 0.05) : 890);
+  const gst = activeOrder?.tax || Math.round(subtotal * 0.05);
+  const packaging = 25;
+  const grandTotal = Math.round(subtotal + gst + packaging + tipAmount);
+
   return (
-    <div className="min-h-screen bg-[#FAF8F5] py-10 pb-24">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        {/* Title Bar */}
+    <div className="min-h-screen bg-[#FAF8F5] py-8 pb-24 text-[#1A1715] font-sans">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#140E0A] text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-[#FF4D2D]/40 flex items-center gap-3 animate-in fade-in slide-in-from-bottom duration-300">
+          <Sparkles className="w-5 h-5 text-[#FF4D2D]" />
+          <span className="text-xs font-bold">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Modals & Drawers */}
+      <DeliveryOtpModal
+        isOpen={isOtpModalOpen}
+        onClose={() => setIsOtpModalOpen(false)}
+        otpCode={deliveryOtp}
+        onVerifySuccess={handleVerifySuccess}
+      />
+
+      <CourierTipModal
+        isOpen={isTipModalOpen}
+        onClose={() => setIsTipModalOpen(false)}
+        courierName={courierName}
+        currentTip={tipAmount}
+        onApplyTip={handleApplyTip}
+      />
+
+      <OrderSupportDrawer
+        isOpen={isSupportDrawerOpen}
+        onClose={() => setIsSupportDrawerOpen(false)}
+        orderNumber={orderNumber}
+        restaurantName={restaurantName}
+        courierName={courierName}
+      />
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-7">
+        {/* Title Bar & Order Meta */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 border-b border-[#EBE5DF] gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A] animate-ping" />
-              <span className="text-xs font-bold text-[#16A34A] uppercase tracking-wider">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
                 Live Courier Radar
               </span>
+              <span className="text-[11px] text-[#9E948C] font-mono">
+                Order #{orderNumber}
+              </span>
             </div>
-            <h1 className="text-3xl font-black text-[#1A1715] font-sans mt-0.5">
-              Order Tracking & ETA
+            <h1 className="text-2xl sm:text-4xl font-black text-[#1A1715] font-sans mt-0.5">
+              Live Delivery Telemetry & Radar
             </h1>
             <p className="text-xs text-[#766E65] mt-0.5">
-              Tracking #{activeOrder?.orderNumber || "CRV-894210"} • From{" "}
-              <strong>{activeOrder?.restaurantName || "The Truffle & Brioche Co."}</strong>
+              Dispatched from <strong>{restaurantName}</strong> • Bandra West, Mumbai
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1.5 rounded-xl bg-[#FFF1EE] text-[#FF4D2D] font-bold text-xs flex items-center gap-1.5">
-              <Clock className="w-4 h-4" />
-              <span>Arriving in ~18 mins</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Courier Map Simulation Card */}
-        <div className="rounded-3xl bg-[#140E0A] text-white p-6 sm:p-8 border border-[#2A1F18] relative overflow-hidden shadow-2xl space-y-6">
-          {/* Top Simulation Disclaimer Badge */}
-          <div className="flex items-center justify-between z-10 relative">
-            <span className="text-[11px] font-bold bg-[#1C1511] text-[#A3988E] px-3 py-1 rounded-full border border-[#2A1F18]">
-              Simulated Dispatch Track (Dev Demonstration)
-            </span>
-            <span className="text-xs text-[#16A34A] font-bold flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Courier Temperature 36.4°C Verified
-            </span>
-          </div>
-
-          {/* Graphical Route Simulation View */}
-          <div className="relative h-44 sm:h-52 w-full rounded-2xl bg-[#1C1511] border border-[#2A1F18] overflow-hidden flex items-center justify-center p-6">
-            <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#FF4D2D_1px,transparent_1px)] [background-size:16px_16px]" />
-
-            {/* Route Path Line */}
-            <div className="relative w-full max-w-xl flex items-center justify-between">
-              <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-1 bg-[#2A1F18]">
-                <div
-                  className="h-full bg-gradient-to-r from-[#FF4D2D] to-[#FFA384] transition-all duration-700"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-
-              {/* Kitchen Node */}
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="w-12 h-12 rounded-2xl bg-[#FF4D2D] flex items-center justify-center text-white shadow-lg shadow-[#FF4D2D]/40">
-                  <ChefHat className="w-6 h-6" />
-                </div>
-                <span className="text-[10px] font-bold text-white mt-1.5">Kitchen</span>
-                <span className="text-[9px] text-[#A3988E]">Dispatched</span>
-              </div>
-
-              {/* Courier Moving Node */}
-              <div
-                className="relative z-10 flex flex-col items-center transition-all duration-700"
-                style={{ position: "relative", transform: `translateX(${(progressPercent - 50) * 2}px)` }}
-              >
-                <div className="w-14 h-14 rounded-2xl bg-[#16A34A] flex items-center justify-center text-white shadow-xl shadow-[#16A34A]/50 animate-bounce">
-                  <Bike className="w-7 h-7" />
-                </div>
-                <span className="text-[10px] font-black text-[#16A34A] mt-1.5">Vikram R.</span>
-                <span className="text-[9px] text-white/70">On EV Scooter</span>
-              </div>
-
-              {/* Delivery Destination Node */}
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="w-12 h-12 rounded-2xl bg-[#2A1D16] border border-[#FF4D2D]/40 flex items-center justify-center text-[#FF4D2D]">
-                  <MapPin className="w-6 h-6" />
-                </div>
-                <span className="text-[10px] font-bold text-white mt-1.5">You</span>
-                <span className="text-[9px] text-[#A3988E]">Bandra West</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Courier Details Card */}
-          <div className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-2xl bg-[#1C1511] border border-[#2A1F18] gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#FF4D2D]/20 border border-[#FF4D2D]/40 flex items-center justify-center text-[#FF4D2D] font-black text-lg">
-                VR
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-white">
-                  {activeOrder?.riderName || "Vikram R. (CRAVE Courier Partner)"}
-                </h4>
-                <p className="text-xs text-[#A3988E]">
-                  Delivered 1,420+ 5-Star Cravings • Thermal insulated bag
-                </p>
-              </div>
-            </div>
-
-            <a
-              href={`tel:${activeOrder?.riderPhone || "+919845011234"}`}
-              className="px-4 py-2 rounded-xl bg-[#16A34A] hover:bg-[#15803D] text-white text-xs font-bold transition-colors flex items-center gap-2"
+          {/* Quick Action Badges */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Audio Toggle */}
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="p-2 rounded-xl bg-white border border-[#EBE5DF] hover:border-[#1A1715] text-[#766E65] hover:text-[#1A1715] transition-colors cursor-pointer"
+              title={soundEnabled ? "Mute audio chimes" : "Enable milestone chimes"}
             >
-              <Phone className="w-3.5 h-3.5" />
-              <span>Call Courier</span>
-            </a>
+              {soundEnabled ? <Volume2 className="w-4 h-4 text-[#FF4D2D]" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+
+            {/* Delivery OTP Badge */}
+            <button
+              onClick={() => setIsOtpModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-[#FFF1EE] hover:bg-[#FFE5E0] border border-[#FF4D2D]/30 text-[#FF4D2D] font-mono font-bold text-xs flex items-center gap-2 cursor-pointer transition-colors shadow-2xs"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Handover OTP: {deliveryOtp}</span>
+            </button>
+
+            {/* Support Concierge */}
+            <button
+              onClick={() => setIsSupportDrawerOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-[#1A1715] hover:bg-black text-white text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-[#FF4D2D]" />
+              <span>Live Concierge</span>
+            </button>
           </div>
         </div>
 
-        {/* Status Lifecycle Steps */}
+        {/* Real-Time GPS Delivery Radar Map */}
+        <DeliveryRadarMap
+          progressPercent={progressPercent}
+          onProgressChange={(pct) => setProgressPercent(pct)}
+          isPlaying={isPlaying}
+          onTogglePlay={() => setIsPlaying(!isPlaying)}
+          onReset={() => setProgressPercent(10)}
+          playbackSpeed={playbackSpeed}
+          onChangeSpeed={(s) => setPlaybackSpeed(s)}
+          restaurantName={restaurantName}
+          deliveryLocality="Bandra West, Mumbai"
+        />
+
+        {/* Courier Info & Live Communication Deck */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+          {/* Rider Profile Card */}
+          <div className="md:col-span-8 p-5 sm:p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs flex flex-col justify-between space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white font-black text-xl flex items-center justify-center shrink-0 shadow-md">
+                  VR
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-base text-[#1A1715]">
+                      {courierName}
+                    </h3>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                      Verified Courier Partner
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#766E65] mt-0.5">
+                    Electric Scooter Fleet • 1,420+ 5-Star Deliveries • Thermal Bag Sealed
+                  </p>
+                </div>
+              </div>
+
+              {/* Courier Actions */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <a
+                  href={`tel:${courierPhone}`}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Call Rider</span>
+                </a>
+
+                <button
+                  onClick={() => setIsTipModalOpen(true)}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#FFF1EE] hover:bg-[#FFE5E0] text-[#FF4D2D] text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-[#FF4D2D]/20"
+                >
+                  <Heart className="w-3.5 h-3.5 fill-[#FF4D2D]" />
+                  <span>{tipAmount > 0 ? `Tip: ₹${tipAmount}` : "Tip Courier"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Food Safety & Bag Telemetry Badges */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 border-t border-[#F3EFEA] text-xs">
+              <div className="p-2.5 rounded-xl bg-[#FAF8F5] border border-[#EBE5DF] flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="text-[#554C43] font-medium">Holographic Tamper Seal Intact</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#FAF8F5] border border-[#EBE5DF] flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#FF4D2D] shrink-0" />
+                <span className="text-[#554C43] font-medium">Under 25-Min Freshness Guarantee</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#FAF8F5] border border-[#EBE5DF] flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="text-[#554C43] font-medium">FSSAI Certified Thermal Carrier</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Handover PIN Action Card */}
+          <div className="md:col-span-4 p-5 sm:p-6 rounded-3xl bg-[#140E0A] text-white border border-[#2A1F18] shadow-md flex flex-col justify-between space-y-4">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-[#FF4D2D] block">
+                Security Verification
+              </span>
+              <h4 className="text-base font-bold text-white mt-1">
+                Parcel Handover PIN
+              </h4>
+              <p className="text-xs text-[#A3988E] mt-1 leading-relaxed">
+                Provide this OTP to your delivery courier upon parcel arrival to verify delivery handover.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#1C1511] border border-white/10 text-center">
+              <span className="font-mono text-2xl font-black tracking-widest text-white">
+                {deliveryOtp}
+              </span>
+            </div>
+
+            <button
+              onClick={() => setIsOtpModalOpen(true)}
+              className="w-full py-2.5 rounded-xl bg-[#2A1F18] hover:bg-[#3D2C22] text-xs font-bold text-[#E5DDD4] hover:text-white transition-colors cursor-pointer text-center"
+            >
+              Simulate Rider Code Entry
+            </button>
+          </div>
+        </div>
+
+        {/* Order Lifecycle Progression Steps */}
         <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-6">
-          <h3 className="text-base font-black text-[#1A1715]">Order Lifecycle Progression</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-black text-[#1A1715]">
+              Order Lifecycle Milestones
+            </h3>
+            <span className="text-xs text-[#766E65]">
+              Stage {timelineStep} of 4 Completed
+            </span>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {steps.map((st) => {
@@ -172,7 +369,7 @@ export default function LiveTrackerPage() {
                   key={st.id}
                   className={`p-4 rounded-2xl border transition-all ${
                     isCurrent
-                      ? "bg-[#FFF5F2] border-[#FF4D2D] ring-1 ring-[#FF4D2D]"
+                      ? "bg-[#FFF5F2] border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30 shadow-md"
                       : isPast
                       ? "bg-[#FAF8F5] border-[#EBE5DF]"
                       : "bg-[#F9F7F5] border-[#EBE5DF] opacity-60"
@@ -184,68 +381,168 @@ export default function LiveTrackerPage() {
                         isCurrent
                           ? "bg-[#FF4D2D] text-white"
                           : isPast
-                          ? "bg-[#16A34A] text-white"
+                          ? "bg-emerald-600 text-white"
                           : "bg-[#E5DDD4] text-[#766E65]"
                       }`}
                     >
                       <Icon className="w-4 h-4" />
                     </div>
                     {isCurrent && (
-                      <span className="text-[10px] font-bold text-[#FF4D2D] uppercase tracking-wider">
-                        Active Step
+                      <span className="text-[10px] font-black text-[#FF4D2D] uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#FFF1EE]">
+                        Live Now
                       </span>
                     )}
                   </div>
                   <h4 className="font-bold text-sm text-[#1A1715]">{st.title}</h4>
-                  <p className="text-xs text-[#766E65] mt-0.5">{st.desc}</p>
+                  <p className="text-xs text-[#766E65] mt-0.5 leading-relaxed">{st.desc}</p>
                 </div>
               );
             })}
           </div>
 
-          {/* Dev Step Switcher */}
-          <div className="pt-2 flex items-center gap-2 text-xs text-[#766E65]">
-            <span className="font-semibold">Simulate state:</span>
-            {[1, 2, 3, 4].map((num) => (
-              <button
-                key={num}
-                onClick={() => {
-                  setTimelineStep(num);
-                  setProgressPercent(num === 1 ? 15 : num === 2 ? 40 : num === 3 ? 75 : 100);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                  timelineStep === num ? "bg-[#1A1715] text-white" : "bg-[#F3EFEA]"
-                }`}
-              >
-                Step {num}
-              </button>
-            ))}
+          {/* Dev State Step Switcher */}
+          <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-[#766E65] border-t border-[#F3EFEA]">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">Simulate Milestones:</span>
+              {[
+                { step: 1, pct: 15, label: "Step 1: Confirmed" },
+                { step: 2, pct: 40, label: "Step 2: Cooking" },
+                { step: 3, pct: 75, label: "Step 3: Dispatched" },
+                { step: 4, pct: 100, label: "Step 4: Delivered" }
+              ].map((s) => (
+                <button
+                  key={s.step}
+                  onClick={() => {
+                    setProgressPercent(s.pct);
+                    setIsPlaying(false);
+                    playAudioChime(s.step === 4 ? "delivered" : s.step === 3 ? "dispatch" : "confirm");
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    timelineStep === s.step
+                      ? "bg-[#1A1715] text-white shadow-xs"
+                      : "bg-[#F3EFEA] text-[#766E65] hover:bg-[#EBE5DF]"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                setProgressPercent(10);
+                setIsPlaying(true);
+              }}
+              className="text-xs font-bold text-[#FF4D2D] hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>Replay Journey</span>
+            </button>
           </div>
         </div>
 
-        {/* Order Details Accordion */}
-        {activeOrder && activeOrder.items && (
-          <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-4">
-            <h3 className="text-base font-black text-[#1A1715]">Dishes in this Order</h3>
-            <div className="space-y-3">
-              {activeOrder.items.map((item, idx) => (
-                <div key={idx} className="flex justify-between text-xs py-2 border-b border-[#F3EFEA] last:border-none">
+        {/* Detailed Order Breakdown & Bill Receipt */}
+        <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-5">
+          <div className="flex items-center justify-between border-b border-[#F3EFEA] pb-4">
+            <div>
+              <h3 className="text-base font-black text-[#1A1715]">
+                Order Invoice & Receipt
+              </h3>
+              <p className="text-xs text-[#766E65]">
+                Billed to your default address • FSSAI Lic #11522000000456
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setToastMessage("Tax invoice generated and downloaded!");
+                setTimeout(() => setToastMessage(null), 3000);
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-[#FAF8F5] hover:bg-[#F3EFEA] border border-[#E5DDD4] text-xs font-bold text-[#1A1715] transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-[#FF4D2D]" />
+              <span>Tax Invoice</span>
+            </button>
+          </div>
+
+          {/* Ordered Dishes List */}
+          <div className="space-y-3">
+            {activeOrder && activeOrder.items && activeOrder.items.length > 0 ? (
+              activeOrder.items.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between text-xs py-2 border-b border-[#F3EFEA] last:border-none"
+                >
                   <div>
-                    <span className="font-bold text-[#1A1715]">
+                    <span className="font-bold text-sm text-[#1A1715]">
                       {item.quantity}x {item.menuItem.name}
                     </span>
-                    {item.customizationSummary && (
+                    {item.customizationSummary && item.customizationSummary.length > 0 && (
                       <p className="text-[11px] text-[#FF4D2D] mt-0.5">
-                        {item.customizationSummary.join(", ")}
+                        {item.customizationSummary.join(" • ")}
                       </p>
                     )}
                   </div>
-                  <span className="font-black text-[#1A1715]">₹{item.totalPrice}</span>
+                  <span className="font-black text-sm text-[#1A1715]">
+                    ₹{item.totalPrice}
+                  </span>
                 </div>
-              ))}
+              ))
+            ) : (
+              /* Fallback Signature Truffle Smash sample receipt */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs py-2 border-b border-[#F3EFEA]">
+                  <div>
+                    <span className="font-bold text-sm text-[#1A1715]">
+                      2x The Crave Signature Truffle Smash
+                    </span>
+                    <p className="text-[11px] text-[#FF4D2D] mt-0.5">
+                      Golden Brioche • Double Wagyu • Aged Cheddar • Truffle Mayo
+                    </p>
+                  </div>
+                  <span className="font-black text-sm text-[#1A1715]">₹778</span>
+                </div>
+                <div className="flex items-center justify-between text-xs py-2 border-b border-[#F3EFEA]">
+                  <div>
+                    <span className="font-bold text-sm text-[#1A1715]">
+                      1x Valrhona Dark Chocolate Ganache Tart
+                    </span>
+                    <p className="text-[11px] text-[#766E65] mt-0.5">
+                      Single-origin 70% dark chocolate • Almond crust
+                    </p>
+                  </div>
+                  <span className="font-black text-sm text-[#1A1715]">₹320</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bill Calculation Itemization */}
+          <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] space-y-2 text-xs">
+            <div className="flex justify-between text-[#766E65]">
+              <span>Items Subtotal</span>
+              <span className="font-mono font-bold text-[#1A1715]">₹{subtotal}</span>
+            </div>
+            <div className="flex justify-between text-[#766E65]">
+              <span>Government GST (5% Food Services)</span>
+              <span className="font-mono font-bold text-[#1A1715]">₹{gst}</span>
+            </div>
+            <div className="flex justify-between text-[#766E65]">
+              <span>Tamper-Evident Packaging & Delivery Sanitization</span>
+              <span className="font-mono font-bold text-[#1A1715]">₹{packaging}</span>
+            </div>
+            {tipAmount > 0 && (
+              <div className="flex justify-between text-emerald-600 font-semibold">
+                <span>Rider Appreciation Tip (100% to Vikram R.)</span>
+                <span className="font-mono font-bold">₹{tipAmount}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm font-black text-[#1A1715] pt-2 border-t border-[#EBE5DF]">
+              <span>Total Paid via Razorpay / UPI</span>
+              <span className="text-[#FF4D2D] font-mono text-base">₹{grandTotal}</span>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
