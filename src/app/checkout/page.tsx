@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useLocation } from "@/context/LocationContext";
-import { OrderRecord, DeliveryPreferenceType } from "@/types";
+import { OrderRecord, DeliveryPreferenceType, SavedAddress } from "@/types";
 import { DeliveryPreferencesSelector } from "@/components/checkout/DeliveryPreferencesSelector";
 
 export default function CheckoutPage() {
@@ -69,64 +69,79 @@ export default function CheckoutPage() {
     );
   }
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     setIsProcessing(true);
 
-    setTimeout(() => {
-      const orderId = "CRV-" + Math.floor(100000 + Math.random() * 900000);
-      const newOrder: OrderRecord = {
-        id: orderId,
-        orderNumber: orderId,
-        createdAt: new Date().toISOString(),
-        status: "confirmed",
-        items: [...items],
-        subtotal,
-        deliveryFee,
-        tax: taxAmount,
-        discount: discountAmount,
-        total: grandTotal,
-        restaurantId: cartRestaurantId || "rst-1",
-        restaurantName: cartRestaurantName || "The Truffle & Brioche Co.",
-        deliveryAddress: {
-          id: "addr-order",
-          tag: "Home",
-          recipientName: "Customer",
-          phone: "+91 98201 44521",
-          state: currentLocation.state,
-          district: currentLocation.district,
-          city: currentLocation.city,
-          locality: currentLocation.locality,
-          pincode: currentLocation.pincode,
-          addressLine: currentLocation.addressLine || `${currentLocation.locality}, ${currentLocation.city}`
-        },
-        deliveryPreference,
-        deliveryInstructions: deliveryInstructions.trim() || undefined,
-        paymentMethod,
-        paymentStatus: "paid",
-        estimatedDeliveryTime: "25 - 30 mins",
-        riderName: "Vikram R. (CRAVE Courier)",
-        riderPhone: "+91 98450 11234"
-      };
+    const orderId = "CRV-" + Math.floor(100000 + Math.random() * 900000);
+    const orderAddress: SavedAddress = {
+      id: "addr-order",
+      tag: "Home",
+      recipientName: "Customer",
+      phone: "+91 98201 44521",
+      state: currentLocation.state,
+      district: currentLocation.district,
+      city: currentLocation.city,
+      locality: currentLocation.locality,
+      pincode: currentLocation.pincode,
+      addressLine: currentLocation.addressLine || `${currentLocation.locality}, ${currentLocation.city}`
+    };
 
-      // Save to order history & active order
-      try {
-        const existingOrders = JSON.parse(localStorage.getItem("crave_orders") || "[]");
-        localStorage.setItem("crave_orders", JSON.stringify([newOrder, ...existingOrders]));
-        localStorage.setItem("crave_active_order", JSON.stringify(newOrder));
-      } catch {}
+    const newOrder: OrderRecord = {
+      id: orderId,
+      orderNumber: orderId,
+      createdAt: new Date().toISOString(),
+      status: "confirmed",
+      items: [...items],
+      subtotal,
+      deliveryFee,
+      tax: taxAmount,
+      discount: discountAmount,
+      total: grandTotal,
+      restaurantId: cartRestaurantId || "rst-1",
+      restaurantName: cartRestaurantName || "The Truffle & Brioche Co.",
+      deliveryAddress: orderAddress,
+      deliveryPreference,
+      deliveryInstructions: deliveryInstructions.trim() || undefined,
+      paymentMethod,
+      paymentStatus: "paid",
+      estimatedDeliveryTime: "25 - 30 mins",
+      riderName: "Vikram R. (CRAVE Courier)",
+      riderPhone: "+91 98450 11234"
+    };
 
-      clearCart();
-      setIsProcessing(false);
-      setOrderConfirmed(newOrder);
-
-      // Confetti celebration
-      confetti({
-        particleCount: 80,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ["#FF4D2D", "#16A34A", "#FFD700", "#140E0A"]
+    try {
+      // Server-side order creation & allowlist validation
+      await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items,
+          deliveryAddress: orderAddress,
+          paymentMethod,
+          deliveryPreference,
+          deliveryInstructions: deliveryInstructions.trim() || undefined,
+        }),
       });
-    }, 1100);
+    } catch {}
+
+    // Save to client order history & active order
+    try {
+      const existingOrders = JSON.parse(localStorage.getItem("crave_orders") || "[]");
+      localStorage.setItem("crave_orders", JSON.stringify([newOrder, ...existingOrders]));
+      localStorage.setItem("crave_active_order", JSON.stringify(newOrder));
+    } catch {}
+
+    clearCart();
+    setIsProcessing(false);
+    setOrderConfirmed(newOrder);
+
+    // Confetti celebration
+    confetti({
+      particleCount: 80,
+      spread: 80,
+      origin: { y: 0.6 },
+      colors: ["#FF4D2D", "#16A34A", "#FFD700", "#140E0A"]
+    });
   };
 
   const preferenceTitles: Record<DeliveryPreferenceType, string> = {
