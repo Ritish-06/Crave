@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { CartItem, MenuItem, BurgerCustomizationState } from "@/types";
+import { useAuth } from "@/context/AuthContext";
 
 interface CartConflictModalState {
   isOpen: boolean;
@@ -48,6 +49,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { requireAuth } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>("CRAVEFIRST");
   const [isCartDrawerOpen, setCartDrawerOpen] = useState(false);
@@ -104,7 +106,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const grandTotal = Math.max(0, subtotal + packagingFee + deliveryFee + taxAmount - discountAmount);
 
-  const addItem = (
+  const doAddItem = (
     item: MenuItem,
     customization?: BurgerCustomizationState,
     customizationSummary?: string[],
@@ -133,6 +135,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const cartItemId = `${item.id}-${Buffer.from(customKey).toString("base64").slice(0, 10)}`;
 
     setItems(prev => {
+      // Re-verify single restaurant constraint on active state
+      if (prev.length > 0 && prev[0].menuItem.restaurantId !== item.restaurantId) {
+        return prev;
+      }
       const existing = prev.find(i => i.cartItemId === cartItemId);
       if (existing) {
         return prev.map(i =>
@@ -154,6 +160,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
 
     return true;
+  };
+
+  const addItem = (
+    item: MenuItem,
+    customization?: BurgerCustomizationState,
+    customizationSummary?: string[],
+    validatedPrice?: number
+  ): boolean => {
+    return requireAuth(() => {
+      doAddItem(item, customization, customizationSummary, validatedPrice);
+    }, `add "${item.name}" to your cart`);
   };
 
   const resolveConflict = (confirmReplace: boolean) => {

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
 import { LocationProvider } from "@/context/LocationContext";
 import { CartProvider } from "@/context/CartContext";
 import { Header } from "@/components/common/Header";
@@ -8,6 +9,7 @@ import { Footer } from "@/components/common/Footer";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { IndiaLocationModal } from "@/components/location/IndiaLocationModal";
 import { CartConflictModal } from "@/components/cart/CartConflictModal";
+import { LoginModal } from "@/components/common/LoginModal";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,16 +37,19 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#FAF8F5] text-[#1A1715]">
-        <LocationProvider>
-          <CartProvider>
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <CartDrawer />
-            <IndiaLocationModal />
-            <CartConflictModal />
-          </CartProvider>
-        </LocationProvider>
+        <AuthProvider>
+          <LocationProvider>
+            <CartProvider>
+              <Header />
+              <main className="flex-1">{children}</main>
+              <Footer />
+              <CartDrawer />
+              <IndiaLocationModal />
+              <CartConflictModal />
+              <LoginModal />
+            </CartProvider>
+          </LocationProvider>
+        </AuthProvider>
       </body>
     </html>
   );

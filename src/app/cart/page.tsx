@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ShoppingBag,
   Plus,
@@ -18,8 +19,11 @@ import {
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useLocation } from "@/context/LocationContext";
+import { useAuth } from "@/context/AuthContext";
 
 export default function CartPage() {
+  const router = useRouter();
+  const { requireAuth } = useAuth();
   const {
     items,
     cartCount,
@@ -366,13 +370,18 @@ export default function CartPage() {
                 <span className="text-[#FF4D2D]">₹{grandTotal}</span>
               </div>
 
-              <Link
-                href="/checkout"
+              <button
+                type="button"
+                onClick={() => {
+                  requireAuth(() => {
+                    router.push("/checkout");
+                  }, "proceed to checkout");
+                }}
                 className="w-full py-4 rounded-2xl bg-[#FF4D2D] hover:bg-[#E03A1A] text-white font-black text-sm shadow-xl shadow-[#FF4D2D]/25 transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
               >
                 <span>Proceed to Checkout</span>
                 <ArrowRight className="w-4 h-4" />
-              </Link>
+              </button>
             </div>
           </div>
         </div>

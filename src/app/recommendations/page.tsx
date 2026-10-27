@@ -27,9 +27,12 @@ import {
 import { MENU_ITEMS, ALL_MENU_ITEMS } from "@/data/menuData";
 import { MenuItem, DietaryType } from "@/types";
 import { useCart } from "@/context/CartContext";
+import { loadFoodIdentity, FoodIdentity, matchesDiet } from "@/lib/foodIdentity";
 
 export default function RecommendationsPage() {
   const { addItem, setCartDrawerOpen } = useCart();
+
+  const [foodIdentity, setFoodIdentity] = useState<FoodIdentity | null>(null);
 
   // Active filter state
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
@@ -41,13 +44,21 @@ export default function RecommendationsPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [timeOfDayGreeting, setTimeOfDayGreeting] = useState<string>("Evening Palate Discovery");
 
-  // Determine time-of-day greeting
+  // Determine time-of-day greeting and load Food Identity
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) setTimeOfDayGreeting("Morning & Brunch Palate Selection");
     else if (hour >= 12 && hour < 17) setTimeOfDayGreeting("Artisanal Lunch Recommendations");
     else if (hour >= 17 && hour < 22) setTimeOfDayGreeting("Evening Gourmet Discovery");
     else setTimeOfDayGreeting("Late Night Midnight Cravings");
+
+    const identity = loadFoodIdentity();
+    if (identity) {
+      setFoodIdentity(identity);
+      if (identity.diet === "vegetarian") setDietaryFilter("veg");
+      else if (identity.diet === "vegan") setDietaryFilter("vegan");
+      if (identity.maxDishPrice) setMaxBudget(identity.maxDishPrice);
+    }
   }, []);
 
   // Filter presets
@@ -73,6 +84,12 @@ export default function RecommendationsPage() {
     } else if (presetId === "studio-3d") {
       setSelectedCategory("Burgers");
       setMaxBudget(600);
+    } else if (presetId === "personalized" && foodIdentity) {
+      if (foodIdentity.diet === "vegetarian") setDietaryFilter("veg");
+      else if (foodIdentity.diet === "vegan") setDietaryFilter("vegan");
+      else setDietaryFilter("all");
+      setMaxBudget(foodIdentity.maxDishPrice ?? 600);
+      setSelectedCategory("All");
     } else {
       setMaxBudget(600);
       setDietaryFilter("all");
@@ -83,6 +100,10 @@ export default function RecommendationsPage() {
   // Provide transparent "Why This Dish?" reasoning based on real properties
   const getDishReasons = (item: MenuItem): string[] => {
     const reasons: string[] = [];
+
+    if (foodIdentity?.cuisines.includes(item.cuisine)) {
+      reasons.push(`Matches your Food Identity cuisine: ${item.cuisine}`);
+    }
 
     if (item.studioEnabled) {
       reasons.push("Interactive 3D Studio: Customize bun, patty, cheese & sauce layers");
@@ -148,13 +169,21 @@ export default function RecommendationsPage() {
       }
       return true;
     }).sort((a, b) => {
-      // Prioritize liked items or higher rating
+      // Prioritize liked items
       const aLiked = feedbackMap[a.id] === "liked" ? 1 : 0;
       const bLiked = feedbackMap[b.id] === "liked" ? 1 : 0;
       if (bLiked !== aLiked) return bLiked - aLiked;
+
+      // Boost items matching user's saved food identity cuisines
+      if (foodIdentity && activePreset === "personalized") {
+        const aCuisineMatch = foodIdentity.cuisines.includes(a.cuisine) ? 1 : 0;
+        const bCuisineMatch = foodIdentity.cuisines.includes(b.cuisine) ? 1 : 0;
+        if (bCuisineMatch !== aCuisineMatch) return bCuisineMatch - aCuisineMatch;
+      }
+
       return b.rating - a.rating;
     });
-  }, [selectedCategory, dietaryFilter, maxBudget, activePreset, dismissedDishIds, feedbackMap]);
+  }, [selectedCategory, dietaryFilter, maxBudget, activePreset, dismissedDishIds, feedbackMap, foodIdentity]);
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] py-10 pb-28 text-[#1A1715] font-sans">

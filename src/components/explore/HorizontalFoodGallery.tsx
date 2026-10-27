@@ -17,7 +17,7 @@ import {
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { MenuItem } from "@/types";
-import { ALL_MENU_ITEMS } from "@/data/menuData";
+import { getMenuItemById } from "@/data/menuData";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
@@ -39,32 +39,32 @@ export function HorizontalFoodGallery({
   // Curate 6 signature showstopper dishes across different culinary genres
   const featuredDishes: { dish: MenuItem; tag: string; bgGradient: string }[] = [
     {
-      dish: ALL_MENU_ITEMS[0], // Truffle Wagyu Double Smash Burger
+      dish: getMenuItemById("dish-burger-1"), // The Crave Signature Truffle Smash Burger
       tag: "FLAGSHIP 3D SMASH",
       bgGradient: "from-[#FF4D2D]/20 via-[#1C1511] to-[#140E0A]",
     },
     {
-      dish: ALL_MENU_ITEMS[1], // Margherita D.O.P. Woodfired Pizza
+      dish: getMenuItemById("dish-pizza-1"), // Margherita D.O.P. Woodfired Pizza
       tag: "WOODFIRED D.O.P.",
       bgGradient: "from-amber-600/20 via-[#1C1511] to-[#140E0A]",
     },
     {
-      dish: ALL_MENU_ITEMS[4], // Signature Butter Chicken Bao
+      dish: getMenuItemById("dish-bao-1"), // Korean Crispy Fried Chicken Gua Bao
       tag: "ASIAN PAN-FUSION",
       bgGradient: "from-orange-600/20 via-[#1C1511] to-[#140E0A]",
     },
     {
-      dish: ALL_MENU_ITEMS[2], // Nizami Subz & Paneer Dum Biryani
+      dish: getMenuItemById("dish-biryani-2"), // Nizami Subz & Paneer Dum Biryani
       tag: "ROYAL DUM SAFAR",
       bgGradient: "from-emerald-600/20 via-[#1C1511] to-[#140E0A]",
     },
     {
-      dish: ALL_MENU_ITEMS[5], // Organic Quinoa Avocado Bowl
+      dish: getMenuItemById("dish-bowl-1"), // Truffle Quinoa & Avocado Power Bowl
       tag: "CLEAN BOTANICA",
       bgGradient: "from-teal-600/20 via-[#1C1511] to-[#140E0A]",
     },
     {
-      dish: ALL_MENU_ITEMS[3], // Belgian Dark Chocolate Soufflé
+      dish: getMenuItemById("dish-dessert-1"), // Valrhona 72% Dark Chocolate Molten Fondant
       tag: "FRENCH PATISSERIE",
       bgGradient: "from-rose-600/20 via-[#1C1511] to-[#140E0A]",
     },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ALL_MENU_ITEMS } from "@/data/menuData";
 import { ALL_RESTAURANTS } from "@/data/restaurantsData";
 import { CartItem, OrderRecord, SavedAddress, DeliveryPreferenceType } from "@/types";
+import { getServerUser } from "@/lib/serverAuth";
 
 const ALLOWED_PREFERENCES: DeliveryPreferenceType[] = [
   "RING_BELL",
@@ -24,6 +25,15 @@ interface CreateOrderPayload {
 
 export async function POST(request: NextRequest) {
   try {
+    // Enforce server-side authentication
+    const user = getServerUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Authentication required to place an order. Please log in to continue." },
+        { status: 401 }
+      );
+    }
+
     const body: CreateOrderPayload = await request.json();
     const {
       items,
@@ -167,6 +177,14 @@ export async function POST(request: NextRequest) {
 // PATCH endpoint to update delivery instructions safely while order is in transit
 export async function PATCH(request: NextRequest) {
   try {
+    const user = getServerUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Authentication required to update delivery instructions." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { orderId, deliveryPreference, deliveryInstructions } = body;
 

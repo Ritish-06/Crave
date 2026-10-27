@@ -346,13 +346,12 @@ export default function SuperAdminPage() {
                     </h3>
                   </div>
                   <p className="text-xs text-[#766E65] mt-0.5">
-                    Live discovery trends, stock-out alerts, velocity rankings, and consumer search gaps across kitchens.
+                    Sample operational analytics model demonstrating discovery trends, stock-out alerts, velocity rankings, and consumer search gaps.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Live Signal Stream Active
+                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1">
+                    Sample Demand Analytics Model
                   </span>
                 </div>
               </div>

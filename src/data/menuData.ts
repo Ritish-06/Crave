@@ -413,3 +413,16 @@ export const MOOD_CATEGORIES = [
 ];
 
 export const ALL_MENU_ITEMS = MENU_ITEMS;
+
+/**
+ * Look up a dish by its stable ID. Prefer this over array indices:
+ * index-based lookups silently return the wrong dish when the menu order changes.
+ * Throws during development if the ID does not exist, so typos surface immediately.
+ */
+export function getMenuItemById(id: string): MenuItem {
+  const item = MENU_ITEMS.find((m) => m.id === id);
+  if (!item) {
+    throw new Error(`Unknown menu item id: ${id}`);
+  }
+  return item;
+}

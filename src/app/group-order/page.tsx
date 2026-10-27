@@ -19,10 +19,11 @@ import {
   ShieldCheck,
   Layers
 } from "lucide-react";
-import { ALL_MENU_ITEMS } from "@/data/menuData";
+import { ALL_MENU_ITEMS, getMenuItemById } from "@/data/menuData";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { MenuItem } from "@/types";
-import GroupCravingMatch from "@/components/group/GroupCravingMatch";
+import GroupCravingMatch, { MatchAssignment } from "@/components/group/GroupCravingMatch";
 
 interface GroupParticipant {
   id: string;
@@ -38,6 +39,7 @@ interface GroupParticipant {
 export default function GroupOrderPage() {
   const router = useRouter();
   const { addItem } = useCart();
+  const { requireAuth } = useAuth();
 
   const [roomCode] = useState("CRAVE-TEAM-942");
   const [copied, setCopied] = useState(false);
@@ -52,7 +54,7 @@ export default function GroupOrderPage() {
       avatarColor: "bg-[#FF4D2D]",
       items: [
         {
-          menuItem: ALL_MENU_ITEMS[0], // Truffle Wagyu Double Smash Burger
+          menuItem: getMenuItemById("dish-burger-1"), // The Crave Signature Truffle Smash Burger
           quantity: 1,
           customizationNote: "Brioche Bun, Double Patty, Swiss Cheese"
         }
@@ -64,7 +66,7 @@ export default function GroupOrderPage() {
       avatarColor: "bg-emerald-600",
       items: [
         {
-          menuItem: ALL_MENU_ITEMS[1], // Smoked Burrata Margherita
+          menuItem: getMenuItemById("dish-fries-1"), // Truffle Parmesan Hand-Cut Fries (veg)
           quantity: 1
         }
       ]
@@ -75,7 +77,7 @@ export default function GroupOrderPage() {
       avatarColor: "bg-amber-600",
       items: [
         {
-          menuItem: ALL_MENU_ITEMS[4], // Signature Butter Chicken Bao
+          menuItem: getMenuItemById("dish-burger-2"), // Fiery Ghost Pepper & Smoked Bacon Smash
           quantity: 2
         }
       ]
@@ -134,31 +136,14 @@ export default function GroupOrderPage() {
     );
   };
 
-  const handleApplyRecommendedCombo = (
-    combo: { menuItem: MenuItem; targetParticipantIndex: number }[]
-  ) => {
-    setParticipants((prev) => {
-      const updated = prev.map((p) => ({
-        ...p,
-        items: [...p.items]
-      }));
-
-      combo.forEach(({ menuItem, targetParticipantIndex }) => {
-        const target = updated[targetParticipantIndex % updated.length];
-        if (target) {
-          const existingIdx = target.items.findIndex((i) => i.menuItem.id === menuItem.id);
-          if (existingIdx > -1) {
-            target.items[existingIdx] = {
-              ...target.items[existingIdx],
-              quantity: target.items[existingIdx].quantity + 1
-            };
-          } else {
-            target.items.push({ menuItem, quantity: 1 });
-          }
-        }
-      });
-      return updated;
-    });
+  const handleApplyMatch = (assignments: MatchAssignment[]) => {
+    // Replace (not append) so trays never mix restaurants; /api/orders rejects mixed orders.
+    setParticipants((prev) =>
+      prev.map((p) => {
+        const match = assignments.find((a) => a.participantId === p.id);
+        return match ? { ...p, items: [{ menuItem: match.menuItem, quantity: 1 }] } : { ...p, items: [] };
+      })
+    );
   };
 
   // Authoritative bill totals
@@ -180,18 +165,20 @@ export default function GroupOrderPage() {
   const activeParticipant = participants.find((p) => p.id === activeParticipantId) || participants[0];
 
   const handleProceedToCheckout = () => {
-    // Add all participant items to the cart
-    participants.forEach((p) => {
-      p.items.forEach((item) => {
-        for (let i = 0; i < item.quantity; i++) {
-          addItem(item.menuItem, undefined, [
-            `Group Member: ${p.name}`,
-            ...(item.customizationNote ? [item.customizationNote] : [])
-          ]);
-        }
+    requireAuth(() => {
+      // Add all participant items to the cart
+      participants.forEach((p) => {
+        p.items.forEach((item) => {
+          for (let i = 0; i < item.quantity; i++) {
+            addItem(item.menuItem, undefined, [
+              `Group Member: ${p.name}`,
+              ...(item.customizationNote ? [item.customizationNote] : [])
+            ]);
+          }
+        });
       });
-    });
-    router.push("/checkout");
+      router.push("/checkout");
+    }, "proceed with consolidated group checkout");
   };
 
   return (
@@ -233,8 +220,8 @@ export default function GroupOrderPage() {
 
         {/* Group Craving Match Consensus Voter */}
         <GroupCravingMatch
-          onApplyRecommendedCombo={handleApplyRecommendedCombo}
-          participantCount={participants.length}
+          participants={participants.map(({ id, name, avatarColor }) => ({ id, name, avatarColor }))}
+          onApplyMatch={handleApplyMatch}
         />
 
         {/* Participant Switcher & Quick Add Member */}

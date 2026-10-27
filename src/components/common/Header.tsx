@@ -20,11 +20,13 @@ import {
 } from "lucide-react";
 import { useLocation } from "@/context/LocationContext";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
 export function Header() {
   const pathname = usePathname();
   const { currentLocation, setLocationModalOpen, isDeliveryAvailable } = useLocation();
   const { cartCount, cartIconRef, setCartDrawerOpen } = useCart();
+  const { user, setLoginModalOpen } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
@@ -131,18 +133,34 @@ export function Header() {
               </button>
             </div>
 
-            {/* Profile Link */}
-            <Link
-              href="/profile"
-              className={`p-2 rounded-xl transition-colors ${
-                isActive("/profile")
-                  ? "bg-[#1A1715] text-white"
-                  : "text-[#665E57] hover:text-[#1A1715] hover:bg-[#F3EFEA]"
-              }`}
-              aria-label="My Account and Orders"
-            >
-              <User className="w-5 h-5" />
-            </Link>
+            {/* User / Profile Link or Sign In Trigger */}
+            {user ? (
+              <Link
+                href="/profile"
+                className={`flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl transition-all border ${
+                  isActive("/profile")
+                    ? "bg-[#1A1715] text-white border-[#1A1715]"
+                    : "bg-[#F3EFEA] hover:bg-[#EBE5DF] text-[#1A1715] border-[#E5DDD4]"
+                }`}
+                aria-label="My Account and Orders"
+              >
+                <div className="w-6 h-6 rounded-lg bg-[#FF4D2D] text-white flex items-center justify-center text-[10px] font-black uppercase shadow-2xs">
+                  {user.name.slice(0, 2)}
+                </div>
+                <span className="hidden sm:inline text-xs font-bold truncate max-w-[80px]">
+                  {user.name.split(" ")[0]}
+                </span>
+              </Link>
+            ) : (
+              <button
+                onClick={() => setLoginModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-[#F3EFEA] text-[#1A1715] border border-[#E5DDD4] text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                aria-label="Sign In or Register"
+              >
+                <User className="w-4 h-4 text-[#FF4D2D]" />
+                <span className="hidden sm:inline">Sign In</span>
+              </button>
+            )}
 
             {/* Mobile Hamburger Menu */}
             <button
@@ -206,7 +224,7 @@ export function Header() {
             );
           })}
 
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
             <Link
               href="/cart"
               onClick={() => setMobileMenuOpen(false)}
@@ -215,6 +233,31 @@ export function Header() {
               <ShoppingBag className="w-5 h-5" />
               <span>View Cart ({cartCount} items)</span>
             </Link>
+
+            {user ? (
+              <Link
+                href="/profile"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-white border border-[#E5DDD4] text-[#1A1715] font-bold text-sm shadow-2xs"
+              >
+                <div className="w-5 h-5 rounded-md bg-[#FF4D2D] text-white flex items-center justify-center text-[10px] font-black uppercase">
+                  {user.name.slice(0, 2)}
+                </div>
+                <span>Account: {user.name}</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setLoginModalOpen(true);
+                }}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-white border border-[#E5DDD4] text-[#1A1715] font-bold text-sm shadow-2xs cursor-pointer"
+              >
+                <User className="w-4 h-4 text-[#FF4D2D]" />
+                <span>Sign In or Register</span>
+              </button>
+            )}
           </div>
         </div>
       )}

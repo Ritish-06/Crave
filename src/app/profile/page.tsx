@@ -4,12 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  User,
-  MapPin,
   Clock,
-  Heart,
-  Sliders,
-  ShieldCheck,
   RotateCcw,
   Plus,
   Trash2,
@@ -20,41 +15,47 @@ import {
   UtensilsCrossed,
   Wallet,
   Bookmark,
-  Bell,
   Check,
-  Eye,
-  Box
+  Box,
+  ShieldCheck,
+  MapPin,
+  Leaf
 } from "lucide-react";
 import { useLocation } from "@/context/LocationContext";
 import { useCart } from "@/context/CartContext";
-import { OrderRecord, MenuItem } from "@/types";
+import { useAuth } from "@/context/AuthContext";
+import { OrderRecord } from "@/types";
 import { ALL_MENU_ITEMS } from "@/data/menuData";
-
-interface FoodIdentity {
-  cuisines: string[];
-  budgetBracket: string;
-  spiceLevel: string;
-  dietaryPref: string;
-  primaryMood: string;
-  updatedAt: string;
-}
+import {
+  loadFoodIdentity,
+  saveFoodIdentity,
+  loadSavedDishIds,
+  saveSavedDishIds,
+  MENU_CUISINES,
+  BUDGET_BRACKETS,
+  SPICE_LEVELS,
+  DIET_OPTIONS,
+  FoodIdentity
+} from "@/lib/foodIdentity";
 
 const DEFAULT_IDENTITY: FoodIdentity = {
-  cuisines: ["North Indian", "Italian", "Pan-Asian"],
-  budgetBracket: "₹250 – ₹500",
-  spiceLevel: "Medium",
-  dietaryPref: "None (All-Inclusive)",
-  primaryMood: "Comfort Food",
+  cuisines: ["North Indian", "Italian & Artisanal Pizza", "Gourmet Burgers"],
+  maxDishPrice: 500,
+  diet: "any",
+  spiceTolerance: 2,
   updatedAt: new Date().toISOString()
 };
 
+const DEFAULT_SAVED_DISHES = ["dish-burger-1", "dish-pizza-1", "dish-bao-1"];
+
 export default function ProfilePage() {
+  const { user, requireAuth, logout, setLoginModalOpen } = useAuth();
   const { savedAddresses, deleteAddress, setLocationModalOpen } = useLocation();
   const { addItem, setCartDrawerOpen } = useCart();
 
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "orders" | "identity" | "addresses" | "collections" | "settings"
+    "orders" | "identity" | "collections" | "addresses" | "settings"
   >("orders");
 
   // Food Identity State
@@ -62,13 +63,9 @@ export default function ProfilePage() {
   const [isSavedRecently, setIsSavedRecently] = useState(false);
 
   // Saved Dishes
-  const [savedDishIds, setSavedDishIds] = useState<string[]>([
-    "crave-dish-01", // Truffle Burger
-    "crave-dish-03", // Burrata Pizza
-    "crave-dish-05"  // Butter Chicken Bao
-  ]);
+  const [savedDishIds, setSavedDishIds] = useState<string[]>(DEFAULT_SAVED_DISHES);
 
-  // Notifications
+  // Notification preferences
   const [notifyWhatsApp, setNotifyWhatsApp] = useState(true);
   const [notifyLowNoise, setNotifyLowNoise] = useState(true);
   const [notifySpecials, setNotifySpecials] = useState(false);
@@ -79,13 +76,15 @@ export default function ProfilePage() {
       if (storedOrders) {
         setOrders(JSON.parse(storedOrders));
       }
-      const storedIdentity = localStorage.getItem("crave_user_food_identity");
-      if (storedIdentity) {
-        setIdentity(JSON.parse(storedIdentity));
+
+      const loadedIdentity = loadFoodIdentity();
+      if (loadedIdentity) {
+        setIdentity(loadedIdentity);
       }
-      const storedSaved = localStorage.getItem("crave_saved_dishes");
-      if (storedSaved) {
-        setSavedDishIds(JSON.parse(storedSaved));
+
+      const loadedSaved = loadSavedDishIds();
+      if (loadedSaved.length > 0) {
+        setSavedDishIds(loadedSaved);
       }
     } catch {}
   }, []);
@@ -93,11 +92,9 @@ export default function ProfilePage() {
   const handleUpdateIdentity = (patch: Partial<FoodIdentity>) => {
     const updated = { ...identity, ...patch, updatedAt: new Date().toISOString() };
     setIdentity(updated);
-    try {
-      localStorage.setItem("crave_user_food_identity", JSON.stringify(updated));
-      setIsSavedRecently(true);
-      setTimeout(() => setIsSavedRecently(false), 2500);
-    } catch {}
+    saveFoodIdentity(updated);
+    setIsSavedRecently(true);
+    setTimeout(() => setIsSavedRecently(false), 2500);
   };
 
   const toggleCuisine = (c: string) => {
@@ -109,18 +106,18 @@ export default function ProfilePage() {
   };
 
   const handleReorder = (order: OrderRecord) => {
-    order.items.forEach((item) => {
-      addItem(item.menuItem, item.customization, item.customizationSummary, item.unitPrice);
-    });
-    setCartDrawerOpen(true);
+    requireAuth(() => {
+      order.items.forEach((item) => {
+        addItem(item.menuItem, item.customization, item.customizationSummary, item.unitPrice);
+      });
+      setCartDrawerOpen(true);
+    }, `reorder dishes from ${order.restaurantName}`);
   };
 
   const removeSavedDish = (id: string) => {
     const next = savedDishIds.filter((x) => x !== id);
     setSavedDishIds(next);
-    try {
-      localStorage.setItem("crave_saved_dishes", JSON.stringify(next));
-    } catch {}
+    saveSavedDishIds(next);
   };
 
   const savedMenuItems = ALL_MENU_ITEMS.filter((item) => savedDishIds.includes(item.id));
@@ -131,17 +128,38 @@ export default function ProfilePage() {
         {/* User Hub Header */}
         <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-[#FF4D2D] text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-[#FF4D2D]/30">
-              RS
+            <div className="w-16 h-16 rounded-2xl bg-[#FF4D2D] text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-[#FF4D2D]/30 uppercase">
+              {user ? user.name.slice(0, 2) : "GF"}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-[#1A1715]">Ritish Sharma</h1>
+                <h1 className="text-2xl font-black text-[#1A1715]">
+                  {user ? user.name : "Guest Foodie"}
+                </h1>
                 <span className="text-[10px] font-bold bg-[#FFF1EE] text-[#FF4D2D] px-2 py-0.5 rounded-md">
-                  CRAVE Connoisseur
+                  {user ? "CRAVE Connoisseur" : "Guest Explorer"}
                 </span>
               </div>
-              <p className="text-xs text-[#766E65] mt-0.5">ritish@example.com • +91 98201 44521</p>
+              <p className="text-xs text-[#766E65] mt-0.5">
+                {user ? `${user.email} ${user.phone ? `• ${user.phone}` : ""}` : "Not logged in • Sign in to save preferences across devices"}
+              </p>
+              <div className="mt-2">
+                {user ? (
+                  <button
+                    onClick={() => logout()}
+                    className="text-xs font-semibold text-[#DC2626] hover:underline cursor-pointer"
+                  >
+                    Log Out of CRAVE
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setLoginModalOpen(true)}
+                    className="px-3 py-1 rounded-xl bg-[#1A1715] hover:bg-black text-white text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                  >
+                    Sign In / Register
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -170,7 +188,7 @@ export default function ProfilePage() {
             { id: "identity", label: "Your Food Identity", icon: Sparkles, badge: "Palate Match" },
             { id: "collections", label: `Saved Bites (${savedDishIds.length})`, icon: Bookmark },
             { id: "addresses", label: `Saved Addresses (${savedAddresses.length})`, icon: MapPin },
-            { id: "settings", label: "Delivery & Security", icon: ShieldCheck }
+            { id: "settings", label: "Preferences & Privacy", icon: ShieldCheck }
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -272,24 +290,24 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* TAB 2: Your Food Identity (Signature CRAVE Differentiator) */}
+        {/* TAB 2: Your Food Identity */}
         {activeTab === "identity" && (
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-[#1A1715] to-[#2E2824] rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden">
               <div className="max-w-2xl space-y-2 relative z-10">
                 <div className="flex items-center gap-2">
                   <span className="px-3 py-0.5 rounded-full bg-[#FF4D2D] text-white text-[10px] font-bold uppercase tracking-wider">
-                    Signature Personalization
+                    Palate Match Engine
                   </span>
                   {isSavedRecently && (
-                    <span className="text-emerald-400 text-xs font-bold flex items-center gap-1 animate-fade-in">
-                      <Check className="w-3.5 h-3.5" /> Synced with Recommendation Engine
+                    <span className="text-emerald-400 text-xs font-bold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Saved & Active on Recommendations
                     </span>
                   )}
                 </div>
                 <h2 className="text-2xl font-black">Your Food Identity</h2>
                 <p className="text-xs text-[#C5BDB5] leading-relaxed">
-                  CRAVE learns your palate without intrusive data tracking. Set your favorite cuisines, budget comfort, spice limits, and cravings. We use this to curate transparent &ldquo;Why This Dish?&rdquo; recommendations.
+                  CRAVE tailors your recommendations to your genuine taste. Choose your favorite cuisines, maximum price bracket, spice preference, and diet. The Recommendations page directly applies these settings to curate dishes with transparent &ldquo;Why This Dish?&rdquo; reasoning.
                 </p>
               </div>
               <Sparkles className="absolute right-6 -bottom-6 w-36 h-36 text-white/5 pointer-events-none" />
@@ -303,20 +321,10 @@ export default function ProfilePage() {
                     <UtensilsCrossed className="w-4 h-4 text-[#FF4D2D]" />
                     Favorite Cuisines (Multi-Select)
                   </label>
-                  <span className="text-[11px] text-[#766E65]">Select 1 or more</span>
+                  <span className="text-[11px] text-[#766E65]">Matches active menu cuisines</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    "North Indian",
-                    "South Indian",
-                    "Italian & Neapolitan",
-                    "Pan-Asian & Dim Sum",
-                    "Artisanal Burgers",
-                    "Healthy & Bowls",
-                    "French Bakery",
-                    "Middle Eastern",
-                    "Mexican & Tacos"
-                  ].map((c) => {
+                  {MENU_CUISINES.map((c) => {
                     const active = identity.cuisines.includes(c);
                     return (
                       <button
@@ -341,33 +349,28 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black uppercase tracking-wider text-[#1A1715] flex items-center gap-2">
                     <Wallet className="w-4 h-4 text-[#FF4D2D]" />
-                    Preferred Order Budget Bracket
+                    Preferred Dish Budget Cap
                   </label>
-                  <span className="text-[11px] text-[#766E65]">Used for Surprise Me & Palate Filter</span>
+                  <span className="text-[11px] text-[#766E65]">Applies to /recommendations default view</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    { label: "Pocket Friendly", range: "Under ₹250", desc: "Quick bites & casual lunches" },
-                    { label: "Daily Comfort", range: "₹250 – ₹500", desc: "Balanced artisanal meals" },
-                    { label: "Chef's Table", range: "₹500+", desc: "Premium cuts & celebratory feasting" }
-                  ].map((b) => (
+                  {BUDGET_BRACKETS.map((b) => (
                     <button
-                      key={b.range}
-                      onClick={() => handleUpdateIdentity({ budgetBracket: b.range })}
+                      key={b.label}
+                      onClick={() => handleUpdateIdentity({ maxDishPrice: b.maxDishPrice })}
                       className={`p-4 rounded-2xl text-left transition-all cursor-pointer border ${
-                        identity.budgetBracket === b.range
+                        identity.maxDishPrice === b.maxDishPrice
                           ? "border-[#FF4D2D] bg-[#FFF8F6] ring-2 ring-[#FF4D2D]/20"
                           : "border-[#EBE5DF] bg-[#FAF8F5] hover:border-[#766E65]"
                       }`}
                     >
                       <div className="flex justify-between items-center mb-1">
                         <span className="font-bold text-xs text-[#1A1715]">{b.label}</span>
-                        {identity.budgetBracket === b.range && (
+                        {identity.maxDishPrice === b.maxDishPrice && (
                           <CheckCircle2 className="w-4 h-4 text-[#FF4D2D]" />
                         )}
                       </div>
                       <span className="text-base font-black text-[#FF4D2D] block">{b.range}</span>
-                      <p className="text-[11px] text-[#766E65] mt-0.5">{b.desc}</p>
                     </button>
                   ))}
                 </div>
@@ -379,94 +382,67 @@ export default function ProfilePage() {
                   <Flame className="w-4 h-4 text-[#FF4D2D]" />
                   Spice Sensitivity
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
-                    { level: "Mild & Subtle", icon: "🌱" },
-                    { level: "Medium", icon: "🌶️" },
-                    { level: "Authentic Indian Hot", icon: "🔥" },
-                    { level: "Ghost Pepper Daredevil", icon: "⚡" }
-                  ].map((s) => (
+                <div className="grid grid-cols-3 gap-2">
+                  {SPICE_LEVELS.map((s) => (
                     <button
                       key={s.level}
-                      onClick={() => handleUpdateIdentity({ spiceLevel: s.level })}
+                      onClick={() => handleUpdateIdentity({ spiceTolerance: s.level })}
                       className={`p-3 rounded-xl text-xs font-bold transition-all text-center cursor-pointer border ${
-                        identity.spiceLevel === s.level
+                        identity.spiceTolerance === s.level
                           ? "border-[#1A1715] bg-[#1A1715] text-white shadow-xs"
                           : "border-[#EBE5DF] bg-[#FAF8F5] text-[#766E65] hover:border-[#1A1715]"
                       }`}
                     >
-                      <span className="text-base block mb-1">{s.icon}</span>
-                      {s.level}
+                      {s.label} ({s.level === 1 ? "Mild" : s.level === 2 ? "Medium" : "Hot"})
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Dietary Lifestyle */}
+              {/* Dietary */}
               <div className="space-y-3 pt-6 border-t border-[#F3EFEA]">
-                <label className="text-xs font-black uppercase tracking-wider text-[#1A1715]">
+                <label className="text-xs font-black uppercase tracking-wider text-[#1A1715] flex items-center gap-2">
+                  <Leaf className="w-4 h-4 text-emerald-600" />
                   Dietary Lifestyle
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {["None (All-Inclusive)", "Pure Vegetarian (Green Dot)", "Vegan Only", "Gluten Conscious"].map((d) => (
+                  {DIET_OPTIONS.map((d) => (
                     <button
-                      key={d}
-                      onClick={() => handleUpdateIdentity({ dietaryPref: d })}
+                      key={d.id}
+                      onClick={() => handleUpdateIdentity({ diet: d.id })}
                       className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        identity.dietaryPref === d
+                        identity.diet === d.id
                           ? "bg-[#1A1715] text-white shadow-xs"
                           : "bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF] hover:border-[#1A1715]"
                       }`}
                     >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Primary Mood */}
-              <div className="space-y-3 pt-6 border-t border-[#F3EFEA]">
-                <label className="text-xs font-black uppercase tracking-wider text-[#1A1715]">
-                  Go-To Craving Mood
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {["Comfort Food", "Something Spicy", "Light & Fresh", "Sweet Escape", "Midnight Cravings", "Treat Yourself"].map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => handleUpdateIdentity({ primaryMood: m })}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        identity.primaryMood === m
-                          ? "bg-[#FF4D2D] text-white shadow-xs"
-                          : "bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF]"
-                      }`}
-                    >
-                      {m}
+                      {d.label}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="pt-4 flex items-center justify-between text-xs text-[#766E65] border-t border-[#F3EFEA]">
-                <span>Last calibrated: {new Date(identity.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
+                <span>Last updated: {new Date(identity.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
                 <Link
                   href="/recommendations"
                   className="font-bold text-[#FF4D2D] hover:underline flex items-center gap-1"
                 >
-                  Test in Palate Match Engine →
+                  View live recommendations for this profile →
                 </Link>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 3: Saved Bites (Collections) */}
+        {/* TAB 3: Saved Bites */}
         {activeTab === "collections" && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-lg font-black text-[#1A1715]">Your Saved Bites</h3>
                 <p className="text-xs text-[#766E65]">
-                  Dishes bookmarked during Explore or 3D Studio sessions.
+                  Dishes bookmarked for fast reordering or 3D inspection.
                 </p>
               </div>
               <Link
@@ -482,7 +458,7 @@ export default function ProfilePage() {
                 <Bookmark className="w-12 h-12 text-[#9E948C] mx-auto" />
                 <h4 className="font-bold text-sm text-[#1A1715]">No saved bites yet</h4>
                 <p className="text-xs text-[#766E65]">
-                  Bookmark dishes as you explore to quickly reorder or view in 3D anytime.
+                  Bookmark dishes as you explore to quickly order or inspect in 3D anytime.
                 </p>
               </div>
             ) : (
@@ -595,15 +571,14 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* TAB 5: Delivery & Security */}
+        {/* TAB 5: Preferences & Privacy */}
         {activeTab === "settings" && (
           <div className="space-y-6">
-            {/* Notification preferences */}
             <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-5">
               <div>
-                <h3 className="text-base font-black text-[#1A1715]">Delivery & Alert Preferences</h3>
+                <h3 className="text-base font-black text-[#1A1715]">Delivery Alert Preferences</h3>
                 <p className="text-xs text-[#766E65]">
-                  Control how riders communicate with you during drop-off.
+                  Control how couriers communicate with you during order fulfillment.
                 </p>
               </div>
 
@@ -624,7 +599,7 @@ export default function ProfilePage() {
                 <label className="flex items-center justify-between p-3 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] cursor-pointer">
                   <div>
                     <span className="font-bold text-[#1A1715] block">Low-Noise Arrival Mode</span>
-                    <span className="text-[#766E65]">Prefers silent SMS over phone calls during late evening orders</span>
+                    <span className="text-[#766E65]">Prefers silent notification over calling during evening orders</span>
                   </div>
                   <input
                     type="checkbox"
@@ -649,21 +624,11 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Security */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-4">
-              <h3 className="text-base font-black text-[#1A1715]">Account & Payment Security</h3>
-              <p className="text-xs text-[#766E65]">
-                Your payment credentials and saved addresses are secured with 256-bit AES encryption. CRAVE never stores plain text payment cards or UPI pins.
+            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-3">
+              <h3 className="text-base font-black text-[#1A1715]">Account Privacy & Credentials</h3>
+              <p className="text-xs text-[#766E65] leading-relaxed">
+                CRAVE authenticates each order using secure session cookies. Your Food Identity and address preferences remain stored on your device and are never shared with advertising trackers.
               </p>
-              <div className="pt-2 flex flex-wrap items-center gap-3">
-                <span className="px-3 py-1.5 rounded-xl bg-[#ECFDF5] text-[#16A34A] text-xs font-bold flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Two-Factor Authentication Active</span>
-                </span>
-                <span className="px-3 py-1.5 rounded-xl bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF] text-xs font-bold">
-                  PCI-DSS Compliant Gateway
-                </span>
-              </div>
             </div>
           </div>
         )}

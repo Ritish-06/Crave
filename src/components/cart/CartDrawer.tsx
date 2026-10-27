@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   X,
   Plus,
@@ -17,8 +18,11 @@ import {
   AlertCircle
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
 export function CartDrawer() {
+  const router = useRouter();
+  const { requireAuth } = useAuth();
   const {
     items,
     cartCount,
@@ -314,14 +318,19 @@ export function CartDrawer() {
 
               {/* Checkout Action */}
               <div className="pt-2 flex flex-col gap-2">
-                <Link
-                  href="/checkout"
-                  onClick={() => setCartDrawerOpen(false)}
+                <button
+                  type="button"
+                  onClick={() => {
+                    requireAuth(() => {
+                      setCartDrawerOpen(false);
+                      router.push("/checkout");
+                    }, "proceed to checkout");
+                  }}
                   className="w-full py-3.5 rounded-2xl bg-[#FF4D2D] hover:bg-[#E03A1A] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span>Proceed to Checkout</span>
                   <ArrowRight className="w-4 h-4" />
-                </Link>
+                </button>
 
                 <div className="flex items-center justify-between text-xs pt-1 px-1">
                   <Link

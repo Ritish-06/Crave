@@ -27,9 +27,11 @@ import { useCart } from "@/context/CartContext";
 import { useLocation } from "@/context/LocationContext";
 import { OrderRecord, DeliveryPreferenceType, SavedAddress } from "@/types";
 import { DeliveryPreferencesSelector } from "@/components/checkout/DeliveryPreferencesSelector";
+import { useAuth } from "@/context/AuthContext";
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { user, requireAuth, setLoginModalOpen } = useAuth();
   const {
     items,
     subtotal,
@@ -70,78 +72,88 @@ export default function CheckoutPage() {
   }
 
   const handlePlaceOrder = async () => {
-    setIsProcessing(true);
+    requireAuth(async () => {
+      setIsProcessing(true);
 
-    const orderId = "CRV-" + Math.floor(100000 + Math.random() * 900000);
-    const orderAddress: SavedAddress = {
-      id: "addr-order",
-      tag: "Home",
-      recipientName: "Customer",
-      phone: "+91 98201 44521",
-      state: currentLocation.state,
-      district: currentLocation.district,
-      city: currentLocation.city,
-      locality: currentLocation.locality,
-      pincode: currentLocation.pincode,
-      addressLine: currentLocation.addressLine || `${currentLocation.locality}, ${currentLocation.city}`
-    };
+      const orderId = "CRV-" + Math.floor(100000 + Math.random() * 900000);
+      const orderAddress: SavedAddress = {
+        id: "addr-order",
+        tag: "Home",
+        recipientName: user?.name || "Customer",
+        phone: user?.phone || "+91 98201 44521",
+        state: currentLocation.state,
+        district: currentLocation.district,
+        city: currentLocation.city,
+        locality: currentLocation.locality,
+        pincode: currentLocation.pincode,
+        addressLine: currentLocation.addressLine || `${currentLocation.locality}, ${currentLocation.city}`
+      };
 
-    const newOrder: OrderRecord = {
-      id: orderId,
-      orderNumber: orderId,
-      createdAt: new Date().toISOString(),
-      status: "confirmed",
-      items: [...items],
-      subtotal,
-      deliveryFee,
-      tax: taxAmount,
-      discount: discountAmount,
-      total: grandTotal,
-      restaurantId: cartRestaurantId || "rst-1",
-      restaurantName: cartRestaurantName || "The Truffle & Brioche Co.",
-      deliveryAddress: orderAddress,
-      deliveryPreference,
-      deliveryInstructions: deliveryInstructions.trim() || undefined,
-      paymentMethod,
-      paymentStatus: "paid",
-      estimatedDeliveryTime: "25 - 30 mins",
-      riderName: "Vikram R. (CRAVE Courier)",
-      riderPhone: "+91 98450 11234"
-    };
+      const newOrder: OrderRecord = {
+        id: orderId,
+        orderNumber: orderId,
+        createdAt: new Date().toISOString(),
+        status: "confirmed",
+        items: [...items],
+        subtotal,
+        deliveryFee,
+        tax: taxAmount,
+        discount: discountAmount,
+        total: grandTotal,
+        restaurantId: cartRestaurantId || "rst-1",
+        restaurantName: cartRestaurantName || "The Truffle & Brioche Co.",
+        deliveryAddress: orderAddress,
+        deliveryPreference,
+        deliveryInstructions: deliveryInstructions.trim() || undefined,
+        paymentMethod,
+        paymentStatus: "paid",
+        estimatedDeliveryTime: "25 - 30 mins",
+        riderName: "Vikram R. (CRAVE Courier)",
+        riderPhone: "+91 98450 11234"
+      };
 
-    try {
-      // Server-side order creation & allowlist validation
-      await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items,
-          deliveryAddress: orderAddress,
-          paymentMethod,
-          deliveryPreference,
-          deliveryInstructions: deliveryInstructions.trim() || undefined,
-        }),
+      try {
+        // Server-side order creation & allowlist validation
+        const response = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items,
+            deliveryAddress: orderAddress,
+            paymentMethod,
+            deliveryPreference,
+            deliveryInstructions: deliveryInstructions.trim() || undefined,
+          }),
+        });
+
+        if (response.status === 401) {
+          setIsProcessing(false);
+          setLoginModalOpen(true);
+          return;
+        }
+      } catch (err) {
+        console.error("Order submission error:", err);
+      }
+
+      // Save to client order history & active order
+      try {
+        const existingOrders = JSON.parse(localStorage.getItem("crave_orders") || "[]");
+        localStorage.setItem("crave_orders", JSON.stringify([newOrder, ...existingOrders]));
+        localStorage.setItem("crave_active_order", JSON.stringify(newOrder));
+      } catch {}
+
+      clearCart();
+      setIsProcessing(false);
+      setOrderConfirmed(newOrder);
+
+      // Confetti celebration
+      confetti({
+        particleCount: 80,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ["#FF4D2D", "#16A34A", "#FFD700", "#140E0A"]
       });
-    } catch {}
-
-    // Save to client order history & active order
-    try {
-      const existingOrders = JSON.parse(localStorage.getItem("crave_orders") || "[]");
-      localStorage.setItem("crave_orders", JSON.stringify([newOrder, ...existingOrders]));
-      localStorage.setItem("crave_active_order", JSON.stringify(newOrder));
-    } catch {}
-
-    clearCart();
-    setIsProcessing(false);
-    setOrderConfirmed(newOrder);
-
-    // Confetti celebration
-    confetti({
-      particleCount: 80,
-      spread: 80,
-      origin: { y: 0.6 },
-      colors: ["#FF4D2D", "#16A34A", "#FFD700", "#140E0A"]
-    });
+    }, "complete and place your order");
   };
 
   const preferenceTitles: Record<DeliveryPreferenceType, string> = {
@@ -240,7 +252,48 @@ export default function CheckoutPage() {
           Checkout & Secure Payment
         </h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8 items-start">
+        {/* Authentication Notice Banner */}
+        {!user ? (
+          <div className="mt-6 p-4 rounded-2xl bg-[#FFF1EE] border border-[#FFD9D1] flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#FF4D2D] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-[#1A1715]">
+                  Ordering as a guest
+                </p>
+                <p className="text-[11px] text-[#766E65]">
+                  Sign in or create an account to auto-fill details and access live GPS tracking.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLoginModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-[#1A1715] hover:bg-black text-white font-bold text-xs shrink-0 transition-colors cursor-pointer shadow-xs"
+            >
+              Sign In / Register
+            </button>
+          </div>
+        ) : (
+          <div className="mt-6 p-3.5 rounded-2xl bg-white border border-[#EBE5DF] flex items-center justify-between shadow-2xs animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-[#FF4D2D] text-white flex items-center justify-center text-xs font-black uppercase">
+                {user.name.slice(0, 2)}
+              </div>
+              <div>
+                <span className="text-xs font-bold text-[#1A1715]">Authenticated as {user.name}</span>
+                <span className="text-[11px] text-[#766E65] ml-2">({user.email})</span>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold text-[#16A34A] bg-[#ECFDF5] px-2.5 py-0.5 rounded-full border border-[#A7F3D0]">
+              Verified Account
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 items-start">
           {/* Left Form: Delivery Address, Delivery Preferences, and Payment Method */}
           <div className="lg:col-span-7 space-y-6">
             {/* 1. Delivery Location Section */}
