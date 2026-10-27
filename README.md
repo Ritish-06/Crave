@@ -47,10 +47,14 @@ CRAVE is a full-stack, modular monolith food platform engineered with **Next.js 
 - **Hub Controls**: Weather emergency toggles and active PIN coverage clusters.
 - **Compliance & Infrastructure**: FSSAI food safety verification audits and edge API health monitors.
 
-### 7. 🛵 Authoritative Billing & Live Delivery Tracker (`/checkout` & `/live-tracker`)
-- **Authoritative Indian Taxation**: Server-side re-calculation of 5% GST under food delivery norms, flat ₹25 tamper-proof packaging fee, and free delivery above ₹499.
-- **Coupons**: Supported codes (`CRAVEFIRST` for 20% off, `SUPER100` for flat ₹100 off).
-- **Delivery Radar**: Simulated courier route radar, courier contact details, and order lifecycle milestones.
+### 7. 🛵 Live Delivery Tracker & GPS Telemetry Radar (`/live-tracker`)
+- **Interactive Vector Delivery Radar**: Real-time 60 FPS GPS telemetry tracking courier movement across urban landmarks with live EV speed (`26 km/h`), battery (`84% EV`), and insulated hot-box temperature (`68.2°C`).
+- **Simulation Controls**: Play/pause auto-advance journey with speed multiplier (1x, 2x, 5x) and scrubbing progress bar.
+- **FSSAI Handover OTP Security**: Prominent 4-digit handover PIN (`7842`) with interactive rider keypad verification modal and celebration confetti upon delivery handover.
+- **Courier Appreciation Tipping**: Direct rider tips (`₹20`, `₹30`, `₹50`, `₹100`) with zero platform commission and instant receipt itemization.
+- **Milestone Chimes**: Built-in harmonic synthesizer chords via Web Audio API for order confirmation, kitchen dispatch, and delivery handover.
+- **Live Concierge Chat Drawer**: Slide-over AI concierge answering courier location queries, special gate entry directions, and food safety standards.
+- **Itemized Tax Invoice**: Complete Indian food delivery tax receipt itemizing 5% GST, flat ₹25 tamper-evident packaging, and one-click invoice download.
 
 ---
 
