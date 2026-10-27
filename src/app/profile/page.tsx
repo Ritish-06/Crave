@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   User,
   MapPin,
@@ -14,30 +15,98 @@ import {
   Trash2,
   CheckCircle2,
   Sparkles,
-  ShoppingBag
+  ShoppingBag,
+  Flame,
+  UtensilsCrossed,
+  Wallet,
+  Bookmark,
+  Bell,
+  Check,
+  Eye,
+  Box
 } from "lucide-react";
 import { useLocation } from "@/context/LocationContext";
 import { useCart } from "@/context/CartContext";
 import { OrderRecord, MenuItem } from "@/types";
-import { MENU_ITEMS } from "@/data/menuData";
+import { ALL_MENU_ITEMS } from "@/data/menuData";
+
+interface FoodIdentity {
+  cuisines: string[];
+  budgetBracket: string;
+  spiceLevel: string;
+  dietaryPref: string;
+  primaryMood: string;
+  updatedAt: string;
+}
+
+const DEFAULT_IDENTITY: FoodIdentity = {
+  cuisines: ["North Indian", "Italian", "Pan-Asian"],
+  budgetBracket: "₹250 – ₹500",
+  spiceLevel: "Medium",
+  dietaryPref: "None (All-Inclusive)",
+  primaryMood: "Comfort Food",
+  updatedAt: new Date().toISOString()
+};
 
 export default function ProfilePage() {
   const { savedAddresses, deleteAddress, setLocationModalOpen } = useLocation();
   const { addItem, setCartDrawerOpen } = useCart();
 
   const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [activeTab, setActiveTab] = useState<"orders" | "addresses" | "preferences" | "security">("orders");
-  const [spicePreference, setSpicePreference] = useState("Medium");
-  const [dietaryPref, setDietaryPref] = useState("None (All-Inclusive)");
+  const [activeTab, setActiveTab] = useState<
+    "orders" | "identity" | "addresses" | "collections" | "settings"
+  >("orders");
+
+  // Food Identity State
+  const [identity, setIdentity] = useState<FoodIdentity>(DEFAULT_IDENTITY);
+  const [isSavedRecently, setIsSavedRecently] = useState(false);
+
+  // Saved Dishes
+  const [savedDishIds, setSavedDishIds] = useState<string[]>([
+    "crave-dish-01", // Truffle Burger
+    "crave-dish-03", // Burrata Pizza
+    "crave-dish-05"  // Butter Chicken Bao
+  ]);
+
+  // Notifications
+  const [notifyWhatsApp, setNotifyWhatsApp] = useState(true);
+  const [notifyLowNoise, setNotifyLowNoise] = useState(true);
+  const [notifySpecials, setNotifySpecials] = useState(false);
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("crave_orders");
-      if (stored) {
-        setOrders(JSON.parse(stored));
+      const storedOrders = localStorage.getItem("crave_orders");
+      if (storedOrders) {
+        setOrders(JSON.parse(storedOrders));
+      }
+      const storedIdentity = localStorage.getItem("crave_user_food_identity");
+      if (storedIdentity) {
+        setIdentity(JSON.parse(storedIdentity));
+      }
+      const storedSaved = localStorage.getItem("crave_saved_dishes");
+      if (storedSaved) {
+        setSavedDishIds(JSON.parse(storedSaved));
       }
     } catch {}
   }, []);
+
+  const handleUpdateIdentity = (patch: Partial<FoodIdentity>) => {
+    const updated = { ...identity, ...patch, updatedAt: new Date().toISOString() };
+    setIdentity(updated);
+    try {
+      localStorage.setItem("crave_user_food_identity", JSON.stringify(updated));
+      setIsSavedRecently(true);
+      setTimeout(() => setIsSavedRecently(false), 2500);
+    } catch {}
+  };
+
+  const toggleCuisine = (c: string) => {
+    const exists = identity.cuisines.includes(c);
+    const updated = exists
+      ? identity.cuisines.filter((x) => x !== c)
+      : [...identity.cuisines, c];
+    handleUpdateIdentity({ cuisines: updated });
+  };
 
   const handleReorder = (order: OrderRecord) => {
     order.items.forEach((item) => {
@@ -46,8 +115,18 @@ export default function ProfilePage() {
     setCartDrawerOpen(true);
   };
 
+  const removeSavedDish = (id: string) => {
+    const next = savedDishIds.filter((x) => x !== id);
+    setSavedDishIds(next);
+    try {
+      localStorage.setItem("crave_saved_dishes", JSON.stringify(next));
+    } catch {}
+  };
+
+  const savedMenuItems = ALL_MENU_ITEMS.filter((item) => savedDishIds.includes(item.id));
+
   return (
-    <div className="min-h-screen bg-[#FAF8F5] py-10 pb-24">
+    <div className="min-h-screen bg-[#FAF8F5] py-10 pb-24 font-sans">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         {/* User Hub Header */}
         <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
@@ -68,44 +147,55 @@ export default function ProfilePage() {
 
           <div className="flex items-center gap-6 text-xs text-[#766E65]">
             <div className="text-center">
-              <span className="block text-xl font-black text-[#1A1715]">
-                {orders.length}
-              </span>
+              <span className="block text-xl font-black text-[#1A1715]">{orders.length}</span>
               <span>Past Orders</span>
             </div>
             <div className="h-8 w-px bg-[#EBE5DF]" />
             <div className="text-center">
-              <span className="block text-xl font-black text-[#FF4D2D]">
-                {savedAddresses.length}
-              </span>
-              <span>Saved Places</span>
+              <span className="block text-xl font-black text-[#FF4D2D]">{savedDishIds.length}</span>
+              <span>Saved Bites</span>
+            </div>
+            <div className="h-8 w-px bg-[#EBE5DF]" />
+            <div className="text-center">
+              <span className="block text-xl font-black text-[#1A1715]">{savedAddresses.length}</span>
+              <span>Addresses</span>
             </div>
           </div>
         </div>
 
         {/* Tab Controls */}
-        <div className="flex border-b border-[#EBE5DF] gap-4 overflow-x-auto pb-1">
+        <div className="flex border-b border-[#EBE5DF] gap-4 sm:gap-6 overflow-x-auto pb-1 text-sm font-bold">
           {[
-            { id: "orders", label: `Order History (${orders.length})` },
-            { id: "addresses", label: `Saved Addresses (${savedAddresses.length})` },
-            { id: "preferences", label: "Palate & Dietary" },
-            { id: "security", label: "Security & Account" }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`pb-3 text-sm font-bold whitespace-nowrap transition-all border-b-2 cursor-pointer ${
-                activeTab === tab.id
-                  ? "border-[#FF4D2D] text-[#FF4D2D]"
-                  : "border-transparent text-[#766E65] hover:text-[#1A1715]"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+            { id: "orders", label: `Order History (${orders.length})`, icon: Clock },
+            { id: "identity", label: "Your Food Identity", icon: Sparkles, badge: "Palate Match" },
+            { id: "collections", label: `Saved Bites (${savedDishIds.length})`, icon: Bookmark },
+            { id: "addresses", label: `Saved Addresses (${savedAddresses.length})`, icon: MapPin },
+            { id: "settings", label: "Delivery & Security", icon: ShieldCheck }
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`pb-3 text-sm font-bold whitespace-nowrap transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+                  activeTab === tab.id
+                    ? "border-[#FF4D2D] text-[#FF4D2D]"
+                    : "border-transparent text-[#766E65] hover:text-[#1A1715]"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+                {tab.badge && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-[#FFF1EE] text-[#FF4D2D] rounded-full font-extrabold">
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* TAB 1: Order History with One-Click Reorder */}
+        {/* TAB 1: Order History */}
         {activeTab === "orders" && (
           <div className="space-y-4">
             {orders.length === 0 ? (
@@ -117,7 +207,7 @@ export default function ProfilePage() {
                 </p>
                 <Link
                   href="/explore"
-                  className="inline-block mt-2 px-6 py-3 rounded-2xl bg-[#FF4D2D] text-white font-bold text-xs"
+                  className="inline-block mt-2 px-6 py-3 rounded-2xl bg-[#FF4D2D] text-white font-bold text-xs hover:bg-[#E03A1B] transition-colors"
                 >
                   Explore Dishes
                 </Link>
@@ -170,8 +260,8 @@ export default function ProfilePage() {
                     ))}
                   </div>
 
-                  <div className="pt-2 border-t border-[#F3EFEA] flex justify-between items-center text-xs text-[#766E65]">
-                    <span>Delivered to: {order.deliveryAddress.locality}</span>
+                  <div className="pt-2 border-t border-[#F3EFEA] flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-[#766E65] gap-2">
+                    <span>Delivered to: {order.deliveryAddress?.locality || "Mumbai"}</span>
                     <Link href="/live-tracker" className="text-[#FF4D2D] font-bold hover:underline">
                       View Tracking Timeline →
                     </Link>
@@ -182,7 +272,283 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* TAB 2: Saved Addresses */}
+        {/* TAB 2: Your Food Identity (Signature CRAVE Differentiator) */}
+        {activeTab === "identity" && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-br from-[#1A1715] to-[#2E2824] rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden">
+              <div className="max-w-2xl space-y-2 relative z-10">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-0.5 rounded-full bg-[#FF4D2D] text-white text-[10px] font-bold uppercase tracking-wider">
+                    Signature Personalization
+                  </span>
+                  {isSavedRecently && (
+                    <span className="text-emerald-400 text-xs font-bold flex items-center gap-1 animate-fade-in">
+                      <Check className="w-3.5 h-3.5" /> Synced with Recommendation Engine
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-2xl font-black">Your Food Identity</h2>
+                <p className="text-xs text-[#C5BDB5] leading-relaxed">
+                  CRAVE learns your palate without intrusive data tracking. Set your favorite cuisines, budget comfort, spice limits, and cravings. We use this to curate transparent &ldquo;Why This Dish?&rdquo; recommendations.
+                </p>
+              </div>
+              <Sparkles className="absolute right-6 -bottom-6 w-36 h-36 text-white/5 pointer-events-none" />
+            </div>
+
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EBE5DF] shadow-xs space-y-8">
+              {/* Cuisines */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase tracking-wider text-[#1A1715] flex items-center gap-2">
+                    <UtensilsCrossed className="w-4 h-4 text-[#FF4D2D]" />
+                    Favorite Cuisines (Multi-Select)
+                  </label>
+                  <span className="text-[11px] text-[#766E65]">Select 1 or more</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "North Indian",
+                    "South Indian",
+                    "Italian & Neapolitan",
+                    "Pan-Asian & Dim Sum",
+                    "Artisanal Burgers",
+                    "Healthy & Bowls",
+                    "French Bakery",
+                    "Middle Eastern",
+                    "Mexican & Tacos"
+                  ].map((c) => {
+                    const active = identity.cuisines.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => toggleCuisine(c)}
+                        className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          active
+                            ? "bg-[#FF4D2D] text-white shadow-xs"
+                            : "bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF] hover:border-[#1A1715]"
+                        }`}
+                      >
+                        {active && <Check className="w-3.5 h-3.5" />}
+                        <span>{c}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Budget Bracket */}
+              <div className="space-y-3 pt-6 border-t border-[#F3EFEA]">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase tracking-wider text-[#1A1715] flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-[#FF4D2D]" />
+                    Preferred Order Budget Bracket
+                  </label>
+                  <span className="text-[11px] text-[#766E65]">Used for Surprise Me & Palate Filter</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { label: "Pocket Friendly", range: "Under ₹250", desc: "Quick bites & casual lunches" },
+                    { label: "Daily Comfort", range: "₹250 – ₹500", desc: "Balanced artisanal meals" },
+                    { label: "Chef's Table", range: "₹500+", desc: "Premium cuts & celebratory feasting" }
+                  ].map((b) => (
+                    <button
+                      key={b.range}
+                      onClick={() => handleUpdateIdentity({ budgetBracket: b.range })}
+                      className={`p-4 rounded-2xl text-left transition-all cursor-pointer border ${
+                        identity.budgetBracket === b.range
+                          ? "border-[#FF4D2D] bg-[#FFF8F6] ring-2 ring-[#FF4D2D]/20"
+                          : "border-[#EBE5DF] bg-[#FAF8F5] hover:border-[#766E65]"
+                      }`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-bold text-xs text-[#1A1715]">{b.label}</span>
+                        {identity.budgetBracket === b.range && (
+                          <CheckCircle2 className="w-4 h-4 text-[#FF4D2D]" />
+                        )}
+                      </div>
+                      <span className="text-base font-black text-[#FF4D2D] block">{b.range}</span>
+                      <p className="text-[11px] text-[#766E65] mt-0.5">{b.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Spice Tolerance */}
+              <div className="space-y-3 pt-6 border-t border-[#F3EFEA]">
+                <label className="text-xs font-black uppercase tracking-wider text-[#1A1715] flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-[#FF4D2D]" />
+                  Spice Sensitivity
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { level: "Mild & Subtle", icon: "🌱" },
+                    { level: "Medium", icon: "🌶️" },
+                    { level: "Authentic Indian Hot", icon: "🔥" },
+                    { level: "Ghost Pepper Daredevil", icon: "⚡" }
+                  ].map((s) => (
+                    <button
+                      key={s.level}
+                      onClick={() => handleUpdateIdentity({ spiceLevel: s.level })}
+                      className={`p-3 rounded-xl text-xs font-bold transition-all text-center cursor-pointer border ${
+                        identity.spiceLevel === s.level
+                          ? "border-[#1A1715] bg-[#1A1715] text-white shadow-xs"
+                          : "border-[#EBE5DF] bg-[#FAF8F5] text-[#766E65] hover:border-[#1A1715]"
+                      }`}
+                    >
+                      <span className="text-base block mb-1">{s.icon}</span>
+                      {s.level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dietary Lifestyle */}
+              <div className="space-y-3 pt-6 border-t border-[#F3EFEA]">
+                <label className="text-xs font-black uppercase tracking-wider text-[#1A1715]">
+                  Dietary Lifestyle
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["None (All-Inclusive)", "Pure Vegetarian (Green Dot)", "Vegan Only", "Gluten Conscious"].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => handleUpdateIdentity({ dietaryPref: d })}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        identity.dietaryPref === d
+                          ? "bg-[#1A1715] text-white shadow-xs"
+                          : "bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF] hover:border-[#1A1715]"
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Primary Mood */}
+              <div className="space-y-3 pt-6 border-t border-[#F3EFEA]">
+                <label className="text-xs font-black uppercase tracking-wider text-[#1A1715]">
+                  Go-To Craving Mood
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["Comfort Food", "Something Spicy", "Light & Fresh", "Sweet Escape", "Midnight Cravings", "Treat Yourself"].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => handleUpdateIdentity({ primaryMood: m })}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        identity.primaryMood === m
+                          ? "bg-[#FF4D2D] text-white shadow-xs"
+                          : "bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF]"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center justify-between text-xs text-[#766E65] border-t border-[#F3EFEA]">
+                <span>Last calibrated: {new Date(identity.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
+                <Link
+                  href="/recommendations"
+                  className="font-bold text-[#FF4D2D] hover:underline flex items-center gap-1"
+                >
+                  Test in Palate Match Engine →
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: Saved Bites (Collections) */}
+        {activeTab === "collections" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-black text-[#1A1715]">Your Saved Bites</h3>
+                <p className="text-xs text-[#766E65]">
+                  Dishes bookmarked during Explore or 3D Studio sessions.
+                </p>
+              </div>
+              <Link
+                href="/explore"
+                className="text-xs font-bold text-[#FF4D2D] hover:underline"
+              >
+                Browse More Dishes →
+              </Link>
+            </div>
+
+            {savedMenuItems.length === 0 ? (
+              <div className="p-12 text-center rounded-3xl bg-white border border-[#EBE5DF] space-y-3">
+                <Bookmark className="w-12 h-12 text-[#9E948C] mx-auto" />
+                <h4 className="font-bold text-sm text-[#1A1715]">No saved bites yet</h4>
+                <p className="text-xs text-[#766E65]">
+                  Bookmark dishes as you explore to quickly reorder or view in 3D anytime.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {savedMenuItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-5 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-3">
+                      <div className="relative h-44 w-full rounded-2xl overflow-hidden bg-[#FAF8F5]">
+                        <Image
+                          src={item.image}
+                          alt={item.name}
+                          fill
+                          className="object-cover"
+                        />
+                        <button
+                          onClick={() => removeSavedDish(item.id)}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-white/80 backdrop-blur-xs text-[#DC2626] hover:bg-white transition-all cursor-pointer"
+                          aria-label="Remove bookmark"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF4D2D]">
+                            {item.category}
+                          </span>
+                          <span className="text-sm font-black text-[#1A1715]">₹{item.price}</span>
+                        </div>
+                        <h4 className="font-bold text-sm text-[#1A1715] mt-0.5">{item.name}</h4>
+                        <p className="text-xs text-[#766E65] line-clamp-2 mt-1">
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-3 border-t border-[#F3EFEA]">
+                      <button
+                        onClick={() => {
+                          addItem(item);
+                          setCartDrawerOpen(true);
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-[#1A1715] hover:bg-[#2A2420] text-white font-bold text-xs transition-colors cursor-pointer text-center"
+                      >
+                        Add to Cart
+                      </button>
+                      <Link
+                        href={`/studio?dish=${item.id}`}
+                        className="p-2.5 rounded-xl bg-[#FFF1EE] hover:bg-[#FFE5E0] text-[#FF4D2D] transition-colors"
+                        title="Inspect in 3D Studio"
+                      >
+                        <Box className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: Saved Addresses */}
         {activeTab === "addresses" && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -196,7 +562,7 @@ export default function ProfilePage() {
                       <span className="font-black text-sm text-[#1A1715]">{addr.tag}</span>
                       <button
                         onClick={() => deleteAddress(addr.id)}
-                        className="text-[#9E948C] hover:text-[#DC2626] p-1"
+                        className="text-[#9E948C] hover:text-[#DC2626] p-1 cursor-pointer"
                         aria-label="Delete address"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -229,69 +595,75 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* TAB 3: Preferences */}
-        {activeTab === "preferences" && (
-          <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-6">
-            <h3 className="text-base font-black text-[#1A1715]">Palate & Dietary Profile</h3>
-
-            <div className="space-y-4 max-w-lg">
+        {/* TAB 5: Delivery & Security */}
+        {activeTab === "settings" && (
+          <div className="space-y-6">
+            {/* Notification preferences */}
+            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-5">
               <div>
-                <label className="block text-xs font-bold text-[#1A1715] mb-2">
-                  Dietary Lifestyle
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {["None (All-Inclusive)", "Pure Vegetarian", "Vegan Only", "Gluten-Free"].map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setDietaryPref(d)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                        dietaryPref === d
-                          ? "bg-[#1A1715] text-white"
-                          : "bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF]"
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
+                <h3 className="text-base font-black text-[#1A1715]">Delivery & Alert Preferences</h3>
+                <p className="text-xs text-[#766E65]">
+                  Control how riders communicate with you during drop-off.
+                </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#1A1715] mb-2">
-                  Preferred Spice Tolerance
+              <div className="space-y-4 max-w-lg text-xs">
+                <label className="flex items-center justify-between p-3 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] cursor-pointer">
+                  <div>
+                    <span className="font-bold text-[#1A1715] block">WhatsApp Status Updates</span>
+                    <span className="text-[#766E65]">Live dispatch milestones sent directly to WhatsApp</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifyWhatsApp}
+                    onChange={(e) => setNotifyWhatsApp(e.target.checked)}
+                    className="w-4 h-4 accent-[#FF4D2D] cursor-pointer"
+                  />
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {["Mild & Subtle", "Medium", "Authentic Indian Hot", "Ghost Pepper Daredevil"].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setSpicePreference(s)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                        spicePreference === s
-                          ? "bg-[#FF4D2D] text-white"
-                          : "bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF]"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+
+                <label className="flex items-center justify-between p-3 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] cursor-pointer">
+                  <div>
+                    <span className="font-bold text-[#1A1715] block">Low-Noise Arrival Mode</span>
+                    <span className="text-[#766E65]">Prefers silent SMS over phone calls during late evening orders</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifyLowNoise}
+                    onChange={(e) => setNotifyLowNoise(e.target.checked)}
+                    className="w-4 h-4 accent-[#FF4D2D] cursor-pointer"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] cursor-pointer">
+                  <div>
+                    <span className="font-bold text-[#1A1715] block">Chef&apos;s Weekly Specials</span>
+                    <span className="text-[#766E65]">Curated discounts based on your Food Identity</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifySpecials}
+                    onChange={(e) => setNotifySpecials(e.target.checked)}
+                    className="w-4 h-4 accent-[#FF4D2D] cursor-pointer"
+                  />
+                </label>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* TAB 4: Security */}
-        {activeTab === "security" && (
-          <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-4">
-            <h3 className="text-base font-black text-[#1A1715]">Account Security</h3>
-            <p className="text-xs text-[#766E65]">
-              Your payment credentials and saved addresses are secured with 256-bit encryption. CRAVE never stores plain text payment tokens.
-            </p>
-            <div className="pt-2 flex items-center gap-3">
-              <span className="px-3 py-1.5 rounded-xl bg-[#ECFDF5] text-[#16A34A] text-xs font-bold flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Two-Factor Authentication Active</span>
-              </span>
+            {/* Security */}
+            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-4">
+              <h3 className="text-base font-black text-[#1A1715]">Account & Payment Security</h3>
+              <p className="text-xs text-[#766E65]">
+                Your payment credentials and saved addresses are secured with 256-bit AES encryption. CRAVE never stores plain text payment cards or UPI pins.
+              </p>
+              <div className="pt-2 flex flex-wrap items-center gap-3">
+                <span className="px-3 py-1.5 rounded-xl bg-[#ECFDF5] text-[#16A34A] text-xs font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Two-Factor Authentication Active</span>
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-[#FAF8F5] text-[#766E65] border border-[#EBE5DF] text-xs font-bold">
+                  PCI-DSS Compliant Gateway
+                </span>
+              </div>
             </div>
           </div>
         )}

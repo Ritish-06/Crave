@@ -22,6 +22,7 @@ import {
 import { ALL_MENU_ITEMS } from "@/data/menuData";
 import { useCart } from "@/context/CartContext";
 import { MenuItem } from "@/types";
+import GroupCravingMatch from "@/components/group/GroupCravingMatch";
 
 interface GroupParticipant {
   id: string;
@@ -133,6 +134,33 @@ export default function GroupOrderPage() {
     );
   };
 
+  const handleApplyRecommendedCombo = (
+    combo: { menuItem: MenuItem; targetParticipantIndex: number }[]
+  ) => {
+    setParticipants((prev) => {
+      const updated = prev.map((p) => ({
+        ...p,
+        items: [...p.items]
+      }));
+
+      combo.forEach(({ menuItem, targetParticipantIndex }) => {
+        const target = updated[targetParticipantIndex % updated.length];
+        if (target) {
+          const existingIdx = target.items.findIndex((i) => i.menuItem.id === menuItem.id);
+          if (existingIdx > -1) {
+            target.items[existingIdx] = {
+              ...target.items[existingIdx],
+              quantity: target.items[existingIdx].quantity + 1
+            };
+          } else {
+            target.items.push({ menuItem, quantity: 1 });
+          }
+        }
+      });
+      return updated;
+    });
+  };
+
   // Authoritative bill totals
   const subtotal = participants.reduce((acc, p) => {
     const pTotal = p.items.reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0);
@@ -202,6 +230,12 @@ export default function GroupOrderPage() {
             </button>
           </div>
         </div>
+
+        {/* Group Craving Match Consensus Voter */}
+        <GroupCravingMatch
+          onApplyRecommendedCombo={handleApplyRecommendedCombo}
+          participantCount={participants.length}
+        />
 
         {/* Participant Switcher & Quick Add Member */}
         <div className="bg-white rounded-3xl p-6 border border-[#EBE5DF] shadow-xs space-y-4">

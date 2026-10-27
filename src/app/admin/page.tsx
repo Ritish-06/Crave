@@ -17,7 +17,12 @@ import {
   Search,
   Power,
   Sliders,
-  DollarSign
+  DollarSign,
+  Sparkles,
+  BarChart3,
+  Flame,
+  Zap,
+  PackageCheck
 } from "lucide-react";
 import { CRAVE_DELIVERY_HUBS, INDIA_STATES_AND_UTS } from "@/data/indiaLocations";
 import { ALL_RESTAURANTS } from "@/data/restaurantsData";
@@ -32,7 +37,7 @@ export default function SuperAdminPage() {
     Pune: true
   });
 
-  const [activeTab, setActiveTab] = useState<"logistics" | "partners" | "infra">("logistics");
+  const [activeTab, setActiveTab] = useState<"logistics" | "partners" | "intelligence" | "infra">("logistics");
 
   const toggleHub = (cityName: string) => {
     setHubStatuses((prev) => ({
@@ -149,6 +154,18 @@ export default function SuperAdminPage() {
           >
             <Building className="w-4 h-4 text-[#FF4D2D]" />
             Kitchen Partners & Compliance ({ALL_RESTAURANTS.length} Kitchens)
+          </button>
+
+          <button
+            onClick={() => setActiveTab("intelligence")}
+            className={`pb-3 border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "intelligence"
+                ? "border-[#FF4D2D] text-[#1A1715]"
+                : "border-transparent text-[#9E948C] hover:text-[#1A1715]"
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-[#FF4D2D]" />
+            Menu Intelligence & Demand Signals
           </button>
 
           <button
@@ -310,6 +327,230 @@ export default function SuperAdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: Menu Intelligence & Demand Signals (Signature Operational Intelligence) */}
+        {activeTab === "intelligence" && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EBE5DF] shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#F3EFEA]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#FFF1EE] text-[#FF4D2D] text-[10px] font-bold uppercase tracking-wider">
+                      Operational Signal
+                    </span>
+                    <h3 className="text-xl font-black text-[#1A1715]">
+                      Menu Intelligence & Unmet Demand Radar
+                    </h3>
+                  </div>
+                  <p className="text-xs text-[#766E65] mt-0.5">
+                    Live discovery trends, stock-out alerts, velocity rankings, and consumer search gaps across kitchens.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Live Signal Stream Active
+                  </span>
+                </div>
+              </div>
+
+              {/* 3 Metrics Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#766E65]">
+                    Top Velocity Dish
+                  </span>
+                  <h4 className="text-sm font-black text-[#1A1715]">Truffle Wagyu Double Smash</h4>
+                  <p className="text-xs text-emerald-600 font-bold">428 orders today • 98.4% rating</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#766E65]">
+                    Stock-Out Revenue Impact
+                  </span>
+                  <h4 className="text-sm font-black text-[#DC2626]">3 Items 86&apos;d</h4>
+                  <p className="text-xs text-[#766E65]">Est. ₹18,400 drop-off in active cart checkouts</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#766E65]">
+                    Unmet Search Demand
+                  </span>
+                  <h4 className="text-sm font-black text-[#FF4D2D]">1,218 Zero-Result Queries</h4>
+                  <p className="text-xs text-[#766E65]">Immediate expansion opportunities for partners</p>
+                </div>
+              </div>
+
+              {/* Grid: Zero-Result Unmet Searches & 86'd Inventory */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+                {/* Unmet Demand (Zero-Result Searches) */}
+                <div className="p-5 rounded-2xl bg-white border border-[#EBE5DF] space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-[#1A1715] flex items-center gap-2">
+                        <Search className="w-4 h-4 text-[#FF4D2D]" />
+                        Zero-Result Search Cravings
+                      </h4>
+                      <p className="text-[11px] text-[#766E65]">
+                        What diners searched for that returned 0 kitchen results (Demand Signal)
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold bg-[#FAF8F5] px-2 py-1 rounded-md text-[#766E65]">
+                      Past 48h
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    {[
+                      { query: "Gluten-Free Dim Sum", searches: 420, trend: "+64%", category: "Pan-Asian" },
+                      { query: "Vegan Tiramisu", searches: 315, trend: "+42%", category: "Artisanal Dessert" },
+                      { query: "Cold Brew Matcha Latte", searches: 289, trend: "+85%", category: "Beverages" },
+                      { query: "Keto Sourdough Toast", searches: 194, trend: "+18%", category: "Bakery" }
+                    ].map((item) => (
+                      <div
+                        key={item.query}
+                        className="flex items-center justify-between p-3 rounded-xl bg-[#FAF8F5] border border-[#EBE5DF]"
+                      >
+                        <div>
+                          <span className="font-bold text-[#1A1715] block">&ldquo;{item.query}&rdquo;</span>
+                          <span className="text-[10px] text-[#766E65]">{item.category}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-bold text-[#FF4D2D] block">{item.searches} searches</span>
+                          <span className="text-[10px] text-emerald-600 font-bold">{item.trend} wow</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 86'd Stock-Out Radar */}
+                <div className="p-5 rounded-2xl bg-white border border-[#EBE5DF] space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-[#1A1715] flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        Kitchen 86&apos;d Stock-Out Radar
+                      </h4>
+                      <p className="text-[11px] text-[#766E65]">
+                        Live items marked unavailable with restock countdowns
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-1 rounded-md">
+                      Requires Supply
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    {[
+                      {
+                        name: "Smoked Burrata Margherita",
+                        kitchen: "The Artisan Dough",
+                        reason: "Fresh artisanal burrata stock depleted",
+                        restockEta: "Tonight 8:00 PM"
+                      },
+                      {
+                        name: "Japanese Matcha Mousse",
+                        kitchen: "Kyoto Kaiseki Lab",
+                        reason: "Ceremonial grade matcha import delay",
+                        restockEta: "Tomorrow Morning"
+                      },
+                      {
+                        name: "Avocado Sourdough Tartine",
+                        kitchen: "Wild Flour Boulangerie",
+                        reason: "Hass avocado ripeness buffer low",
+                        restockEta: "In 45 mins"
+                      }
+                    ].map((item) => (
+                      <div
+                        key={item.name}
+                        className="p-3 rounded-xl bg-[#FAF8F5] border border-[#EBE5DF] space-y-1.5"
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-[#1A1715]">{item.name}</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-100 text-red-700">
+                            86&apos;d (Out of Stock)
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#766E65]">
+                          {item.kitchen} • {item.reason}
+                        </p>
+                        <div className="text-[10px] text-[#FF4D2D] font-bold">
+                          Expected back online: {item.restockEta}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Demand by Time Slot & Feedback Sentiment */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+                {/* Time Slot Demand */}
+                <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-[#1A1715] flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5 text-[#FF4D2D]" />
+                    Demand Distribution by Time Window
+                  </h4>
+                  <div className="space-y-2 text-xs">
+                    {[
+                      { slot: "Lunch Surge (12:30 PM – 2:30 PM)", pct: 38, orders: 920 },
+                      { slot: "High Tea & Coffee (4:30 PM – 6:30 PM)", pct: 14, orders: 340 },
+                      { slot: "Dinner Feast (8:00 PM – 11:00 PM)", pct: 36, orders: 870 },
+                      { slot: "Midnight Crave Window (11:30 PM – 2:00 AM)", pct: 12, orders: 290 }
+                    ].map((slot) => (
+                      <div key={slot.slot} className="space-y-1">
+                        <div className="flex justify-between text-[#1A1715]">
+                          <span className="font-medium">{slot.slot}</span>
+                          <span className="font-bold">{slot.pct}% ({slot.orders} orders)</span>
+                        </div>
+                        <div className="w-full bg-white h-2 rounded-full overflow-hidden border border-[#EBE5DF]">
+                          <div
+                            className="bg-[#FF4D2D] h-full rounded-full"
+                            style={{ width: `${slot.pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sentiment & Packaging Scores */}
+                <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-[#1A1715] flex items-center gap-1.5">
+                    <PackageCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    Customer Delivery & Flavor Sentiment Index
+                  </h4>
+                  <div className="space-y-3 text-xs">
+                    <div className="flex justify-between items-center p-2.5 rounded-xl bg-white border border-[#EBE5DF]">
+                      <div>
+                        <span className="font-bold text-[#1A1715] block">Packaging Heat & Freshness Retention</span>
+                        <span className="text-[10px] text-[#766E65]">Insulated kraft bags with tamper seals</span>
+                      </div>
+                      <span className="text-sm font-black text-emerald-600">98.2%</span>
+                    </div>
+
+                    <div className="flex justify-between items-center p-2.5 rounded-xl bg-white border border-[#EBE5DF]">
+                      <div>
+                        <span className="font-bold text-[#1A1715] block">Dish Customization Fidelity</span>
+                        <span className="text-[10px] text-[#766E65]">3D Studio configured ingredients matched</span>
+                      </div>
+                      <span className="text-sm font-black text-emerald-600">99.1%</span>
+                    </div>
+
+                    <div className="flex justify-between items-center p-2.5 rounded-xl bg-white border border-[#EBE5DF]">
+                      <div>
+                        <span className="font-bold text-[#1A1715] block">Delivery Partner Etiquette & Instructions Adherence</span>
+                        <span className="text-[10px] text-[#766E65]">Compliance with contactless drop-off options</span>
+                      </div>
+                      <span className="text-sm font-black text-emerald-600">97.6%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
