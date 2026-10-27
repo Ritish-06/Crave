@@ -18,16 +18,21 @@ import {
   Check,
   Package,
   Layers,
-  ChefHat
+  ChefHat,
+  MapPin,
+  DoorOpen,
+  Phone,
+  UserCheck
 } from "lucide-react";
 import { ALL_MENU_ITEMS } from "@/data/menuData";
-import { MenuItem } from "@/types";
+import { MenuItem, DeliveryPreferenceType, OrderRecord } from "@/types";
+import { getDeliveryPreferenceMeta } from "@/data/deliveryPreferences";
 
 interface KitchenTicket {
   id: string;
   orderNumber: string;
   placedAt: string;
-  stage: "incoming" | "preparing" | "ready" | "dispatched";
+  stage: "incoming" | "preparing" | "ready" | "dispatched" | "arrived" | "delivered";
   prepTimeRemaining: number; // minutes
   items: {
     name: string;
@@ -38,7 +43,12 @@ interface KitchenTicket {
   customerName: string;
   deliveryType: "Express Courier" | "Standard Delivery";
   riderName?: string;
+  riderPhone?: string;
   pickupOtp?: string;
+  deliveryPreference?: DeliveryPreferenceType;
+  deliveryInstructions?: string;
+  deliveryAddress?: string;
+  deliveryConfirmationMethod?: string;
 }
 
 export default function KitchenDashboardPage() {
@@ -66,7 +76,10 @@ export default function KitchenDashboardPage() {
       ],
       totalAmount: 1840,
       customerName: "Aarav Sharma",
-      deliveryType: "Express Courier"
+      deliveryType: "Express Courier",
+      deliveryPreference: "RING_BELL",
+      deliveryInstructions: "Ring bell twice, then step back.",
+      deliveryAddress: "Apt 501, Horizon Towers, Bandra West"
     },
     {
       id: "t-2",
@@ -90,7 +103,11 @@ export default function KitchenDashboardPage() {
       customerName: "Priya Nair",
       deliveryType: "Express Courier",
       riderName: "Vikram R.",
-      pickupOtp: "4821"
+      riderPhone: "+91 98450 11234",
+      pickupOtp: "4821",
+      deliveryPreference: "LEAVE_AT_DOORSTEP",
+      deliveryInstructions: "Please leave by shoe rack outside Apartment 204.",
+      deliveryAddress: "Flat 204, Sea Green Apartments, Bandra West"
     },
     {
       id: "t-3",
@@ -109,7 +126,11 @@ export default function KitchenDashboardPage() {
       customerName: "Rohan Desai",
       deliveryType: "Standard Delivery",
       riderName: "Sanjay Kumar",
-      pickupOtp: "7719"
+      riderPhone: "+91 98201 54321",
+      pickupOtp: "7719",
+      deliveryPreference: "NO_RING_OR_KNOCK",
+      deliveryInstructions: "Baby sleeping. Silent drop-off, do not knock.",
+      deliveryAddress: "12 Perry Road, Bandra West"
     }
   ]);
 
@@ -118,24 +139,107 @@ export default function KitchenDashboardPage() {
     "dish-risotto-1" // initial out-of-stock item
   ]);
 
+  // Sync active user order from localStorage into the Kitchen pipeline
+  useEffect(() => {
+    try {
+      const activeRaw = localStorage.getItem("crave_active_order");
+      if (activeRaw) {
+        const active: OrderRecord = JSON.parse(activeRaw);
+        const mappedStage =
+          active.status === "preparing"
+            ? "preparing"
+            : active.status === "ready_for_pickup"
+            ? "ready"
+            : active.status === "out_for_delivery" || active.status === "approaching"
+            ? "dispatched"
+            : active.status === "arrived"
+            ? "arrived"
+            : active.status === "delivered"
+            ? "delivered"
+            : "incoming";
+
+        const convertedTicket: KitchenTicket = {
+          id: active.id || `t-active-${active.orderNumber}`,
+          orderNumber: active.orderNumber,
+          placedAt: "Just now (Active User Order)",
+          stage: mappedStage,
+          prepTimeRemaining: 15,
+          items: (active.items || []).map((it) => ({
+            name: it.menuItem.name,
+            quantity: it.quantity,
+            notes: it.customizationSummary || [],
+          })),
+          totalAmount: active.total,
+          customerName: active.deliveryAddress?.recipientName || "Valued Customer",
+          deliveryType: "Express Courier",
+          riderName: active.riderName || "Vikram R.",
+          riderPhone: active.riderPhone || "+91 98450 11234",
+          pickupOtp: "7842",
+          deliveryPreference: active.deliveryPreference || "RING_BELL",
+          deliveryInstructions: active.deliveryInstructions || "",
+          deliveryAddress: active.deliveryAddress
+            ? `${active.deliveryAddress.addressLine ? active.deliveryAddress.addressLine + ", " : ""}${active.deliveryAddress.locality}, ${active.deliveryAddress.city}`
+            : "Bandra West, Mumbai",
+        };
+
+        setTickets((prev) => {
+          const exists = prev.some((t) => t.orderNumber === convertedTicket.orderNumber);
+          if (!exists) return [convertedTicket, ...prev];
+          return prev;
+        });
+      }
+    } catch {}
+  }, []);
+
   const toggleStockStatus = (id: string) => {
     setOutOfStockIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
-  const advanceTicketStage = (ticketId: string) => {
+  // Sync ticket status change back to localStorage active order
+  const syncToActiveOrder = (orderNumber: string, newStatus: string) => {
+    try {
+      const activeRaw = localStorage.getItem("crave_active_order");
+      if (activeRaw) {
+        const active: OrderRecord = JSON.parse(activeRaw);
+        if (active.orderNumber === orderNumber) {
+          active.status = newStatus as any;
+          localStorage.setItem("crave_active_order", JSON.stringify(active));
+        }
+      }
+    } catch {}
+  };
+
+  const advanceTicketStage = (ticketId: string, customNextStage?: KitchenTicket["stage"]) => {
     setTickets((prev) =>
       prev.map((t) => {
         if (t.id !== ticketId) return t;
+
+        if (customNextStage) {
+          syncToActiveOrder(t.orderNumber, customNextStage);
+          return { ...t, stage: customNextStage };
+        }
+
         if (t.stage === "incoming") {
+          syncToActiveOrder(t.orderNumber, "preparing");
           return { ...t, stage: "preparing", riderName: "Vikram R.", pickupOtp: "8312" };
         }
         if (t.stage === "preparing") {
+          syncToActiveOrder(t.orderNumber, "ready_for_pickup");
           return { ...t, stage: "ready", prepTimeRemaining: 0 };
         }
         if (t.stage === "ready") {
+          syncToActiveOrder(t.orderNumber, "out_for_delivery");
           return { ...t, stage: "dispatched" };
+        }
+        if (t.stage === "dispatched") {
+          syncToActiveOrder(t.orderNumber, "arrived");
+          return { ...t, stage: "arrived" };
+        }
+        if (t.stage === "arrived") {
+          syncToActiveOrder(t.orderNumber, "delivered");
+          return { ...t, stage: "delivered" };
         }
         return t;
       })
@@ -159,12 +263,15 @@ export default function KitchenDashboardPage() {
       ],
       totalAmount: 649,
       customerName: "Kavya Menon",
-      deliveryType: "Express Courier"
+      deliveryType: "Express Courier",
+      deliveryPreference: "LEAVE_AT_DOORSTEP",
+      deliveryInstructions: "Ring bell then leave at doorstep please.",
+      deliveryAddress: "Flat 101, Hill Road, Bandra West"
     };
 
     setTickets((prev) => [newTicket, ...prev]);
 
-    // Simple audio chime simulation via Web Audio API
+    // Audio chime simulation via Web Audio API
     if (audioEnabled && typeof window !== "undefined") {
       try {
         const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -186,6 +293,7 @@ export default function KitchenDashboardPage() {
   const incomingCount = tickets.filter((t) => t.stage === "incoming").length;
   const preparingCount = tickets.filter((t) => t.stage === "preparing").length;
   const readyCount = tickets.filter((t) => t.stage === "ready").length;
+  const dispatchCount = tickets.filter((t) => t.stage === "dispatched" || t.stage === "arrived").length;
 
   return (
     <div className="min-h-screen bg-[#140E0A] text-[#FAF8F5] py-8 px-4 sm:px-6 lg:px-8 font-sans">
@@ -205,7 +313,7 @@ export default function KitchenDashboardPage() {
               The Truffle & Brioche Co. — KDS
             </h1>
             <p className="text-xs text-[#9E948C]">
-              Live Kitchen Display System (KDS), Dispatch Pipeline & 86-Item Inventory Control
+              Live Kitchen Display System (KDS), Dispatch Pipeline & Delivery Preferences Courier Control
             </p>
           </div>
 
@@ -230,6 +338,14 @@ export default function KitchenDashboardPage() {
               <Plus className="w-4 h-4" />
               Simulate Incoming Ticket
             </button>
+
+            <Link
+              href="/live-tracker"
+              className="px-4 py-2 rounded-xl bg-[#2A1F18] hover:bg-[#3D2C22] border border-[#3D2C22] text-[#FAF8F5] text-xs font-bold transition-colors flex items-center gap-1.5"
+            >
+              <Truck className="w-4 h-4 text-[#FF4D2D]" />
+              <span>Live Customer Tracker</span>
+            </Link>
           </div>
         </div>
 
@@ -253,10 +369,10 @@ export default function KitchenDashboardPage() {
 
           <div className="bg-[#1C1511] p-5 rounded-2xl border border-[#2A1F18] space-y-1">
             <span className="text-[11px] text-[#9E948C] uppercase font-bold tracking-wider">
-              Today&apos;s Gross Sales
+              Active Dispatches
             </span>
-            <div className="text-2xl sm:text-3xl font-black text-[#FF4D2D]">₹24,850</div>
-            <span className="text-[10px] text-[#9E948C] font-medium">42 fulfilled orders</span>
+            <div className="text-2xl sm:text-3xl font-black text-[#FF4D2D]">{dispatchCount}</div>
+            <span className="text-[10px] text-[#9E948C] font-medium">Couriers en route</span>
           </div>
 
           <div className="bg-[#1C1511] p-5 rounded-2xl border border-[#2A1F18] space-y-1">
@@ -279,7 +395,7 @@ export default function KitchenDashboardPage() {
             }`}
           >
             <Flame className="w-4 h-4 text-[#FF4D2D]" />
-            Live Cooking Pipeline ({tickets.filter((t) => t.stage !== "dispatched").length})
+            Live Dispatch Pipeline ({tickets.filter((t) => t.stage !== "delivered").length})
           </button>
 
           <button
@@ -295,15 +411,15 @@ export default function KitchenDashboardPage() {
           </button>
         </div>
 
-        {/* VIEW 1: Live Kanban Pipeline */}
+        {/* VIEW 1: Live Kanban Pipeline (4 columns: Incoming, Preparing, Ready, Active Dispatch) */}
         {activeTab === "pipeline" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
             {/* Column 1: Incoming */}
             <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-[#2A1F18]">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
                     1. Incoming Orders
                   </h3>
                 </div>
@@ -315,61 +431,84 @@ export default function KitchenDashboardPage() {
               <div className="space-y-4">
                 {tickets
                   .filter((t) => t.stage === "incoming")
-                  .map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      className="bg-[#1C1511] rounded-2xl p-5 border-2 border-amber-500/40 shadow-lg space-y-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] text-[#9E948C] font-mono block">
-                            {ticket.placedAt}
+                  .map((ticket) => {
+                    const prefMeta = getDeliveryPreferenceMeta(ticket.deliveryPreference);
+                    return (
+                      <div
+                        key={ticket.id}
+                        className="bg-[#1C1511] rounded-2xl p-4 sm:p-5 border-2 border-amber-500/40 shadow-lg space-y-3.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-[#9E948C] font-mono block">
+                              {ticket.placedAt}
+                            </span>
+                            <span className="text-sm font-bold text-white">{ticket.orderNumber}</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-400 text-[10px] font-bold">
+                            {ticket.deliveryType}
                           </span>
-                          <span className="text-sm font-bold text-white">{ticket.orderNumber}</span>
                         </div>
-                        <span className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-[10px] font-bold">
-                          {ticket.deliveryType}
-                        </span>
-                      </div>
 
-                      <div className="space-y-2 py-2 border-y border-[#2A1F18]">
-                        {ticket.items.map((item, idx) => (
-                          <div key={idx} className="space-y-1">
-                            <div className="flex justify-between text-xs font-bold text-white">
-                              <span>
-                                {item.quantity}x {item.name}
+                        {/* Delivery Preference Card */}
+                        <div className="p-2.5 rounded-xl bg-[#2A1F18] border border-[#3D2C22] space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
+                              <span>{prefMeta.emoji}</span>
+                              <span>{prefMeta.title}</span>
+                            </span>
+                            {prefMeta.isContactless && (
+                              <span className="text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">
+                                Contactless
                               </span>
-                            </div>
-                            {item.notes && item.notes.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {item.notes.map((n, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-1.5 py-0.5 rounded text-[9px] bg-[#2A1F18] text-[#C4B7AC]"
-                                  >
-                                    {n}
-                                  </span>
-                                ))}
-                              </div>
                             )}
                           </div>
-                        ))}
-                      </div>
+                          {ticket.deliveryInstructions && (
+                            <p className="text-[11px] text-[#E5DDD4] italic bg-[#140E0A] p-2 rounded-lg border border-white/5">
+                              &ldquo;{ticket.deliveryInstructions}&rdquo;
+                            </p>
+                          )}
+                        </div>
 
-                      <div className="flex items-center justify-between text-xs text-[#9E948C]">
-                        <span>Customer: {ticket.customerName}</span>
-                        <span className="font-bold text-white">₹{ticket.totalAmount}</span>
-                      </div>
+                        <div className="space-y-1.5 py-2 border-y border-[#2A1F18]">
+                          {ticket.items.map((item, idx) => (
+                            <div key={idx} className="space-y-1">
+                              <div className="flex justify-between text-xs font-bold text-white">
+                                <span>
+                                  {item.quantity}x {item.name}
+                                </span>
+                              </div>
+                              {item.notes && item.notes.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {item.notes.map((n, i) => (
+                                    <span
+                                      key={i}
+                                      className="px-1.5 py-0.5 rounded text-[9px] bg-[#2A1F18] text-[#C4B7AC]"
+                                    >
+                                      {n}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
 
-                      <button
-                        onClick={() => advanceTicketStage(ticket.id)}
-                        className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Flame className="w-4 h-4" />
-                        Accept & Start Cooking
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between text-xs text-[#9E948C]">
+                          <span>Customer: {ticket.customerName}</span>
+                          <span className="font-bold text-white">₹{ticket.totalAmount}</span>
+                        </div>
+
+                        <button
+                          onClick={() => advanceTicketStage(ticket.id)}
+                          className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Flame className="w-4 h-4" />
+                          Accept & Start Cooking
+                        </button>
+                      </div>
+                    );
+                  })}
 
                 {incomingCount === 0 && (
                   <div className="p-8 text-center bg-[#1C1511]/40 rounded-2xl border border-dashed border-[#2A1F18] text-[#766E65] text-xs">
@@ -384,7 +523,7 @@ export default function KitchenDashboardPage() {
               <div className="flex items-center justify-between pb-2 border-b border-[#2A1F18]">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#FF4D2D]"></span>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
                     2. In Preparation (KDS)
                   </h3>
                 </div>
@@ -396,66 +535,89 @@ export default function KitchenDashboardPage() {
               <div className="space-y-4">
                 {tickets
                   .filter((t) => t.stage === "preparing")
-                  .map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      className="bg-[#1C1511] rounded-2xl p-5 border border-[#2A1F18] shadow-lg space-y-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] text-[#9E948C] font-mono block">
-                            Target Prep Time:
-                          </span>
-                          <span className="text-sm font-black text-[#FF4D2D] flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {ticket.prepTimeRemaining} mins remaining
+                  .map((ticket) => {
+                    const prefMeta = getDeliveryPreferenceMeta(ticket.deliveryPreference);
+                    return (
+                      <div
+                        key={ticket.id}
+                        className="bg-[#1C1511] rounded-2xl p-4 sm:p-5 border border-[#2A1F18] shadow-lg space-y-3.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-[#9E948C] font-mono block">
+                              Target Prep Time:
+                            </span>
+                            <span className="text-sm font-black text-[#FF4D2D] flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {ticket.prepTimeRemaining} mins remaining
+                            </span>
+                          </div>
+                          <span className="text-xs font-mono font-bold text-white">
+                            {ticket.orderNumber}
                           </span>
                         </div>
-                        <span className="text-xs font-mono font-bold text-white">
-                          {ticket.orderNumber}
-                        </span>
-                      </div>
 
-                      <div className="space-y-2 py-2 border-y border-[#2A1F18]">
-                        {ticket.items.map((item, idx) => (
-                          <div key={idx} className="space-y-1">
-                            <div className="flex justify-between text-xs font-bold text-white">
-                              <span>
-                                {item.quantity}x {item.name}
+                        {/* Delivery Preference */}
+                        <div className="p-2.5 rounded-xl bg-[#2A1F18] border border-[#3D2C22] space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-[#FF4D2D] flex items-center gap-1.5">
+                              <span>{prefMeta.emoji}</span>
+                              <span>{prefMeta.title}</span>
+                            </span>
+                            {prefMeta.isContactless && (
+                              <span className="text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">
+                                Contactless
                               </span>
-                            </div>
-                            {item.notes && item.notes.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {item.notes.map((n, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-1.5 py-0.5 rounded text-[9px] bg-[#2A1F18] text-[#C4B7AC]"
-                                  >
-                                    {n}
-                                  </span>
-                                ))}
-                              </div>
                             )}
                           </div>
-                        ))}
-                      </div>
+                          {ticket.deliveryInstructions && (
+                            <p className="text-[11px] text-[#E5DDD4] italic bg-[#140E0A] p-2 rounded-lg border border-white/5">
+                              &ldquo;{ticket.deliveryInstructions}&rdquo;
+                            </p>
+                          )}
+                        </div>
 
-                      <div className="flex items-center justify-between text-xs text-[#9E948C]">
-                        <span>Assigned Courier: {ticket.riderName || "Matching..."}</span>
-                        <span className="font-mono text-emerald-400 font-bold">
-                          OTP: {ticket.pickupOtp}
-                        </span>
-                      </div>
+                        <div className="space-y-1.5 py-2 border-y border-[#2A1F18]">
+                          {ticket.items.map((item, idx) => (
+                            <div key={idx} className="space-y-1">
+                              <div className="flex justify-between text-xs font-bold text-white">
+                                <span>
+                                  {item.quantity}x {item.name}
+                                </span>
+                              </div>
+                              {item.notes && item.notes.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {item.notes.map((n, i) => (
+                                    <span
+                                      key={i}
+                                      className="px-1.5 py-0.5 rounded text-[9px] bg-[#2A1F18] text-[#C4B7AC]"
+                                    >
+                                      {n}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
 
-                      <button
-                        onClick={() => advanceTicketStage(ticket.id)}
-                        className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Mark Ready for Courier Pickup
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between text-xs text-[#9E948C]">
+                          <span>Courier: {ticket.riderName || "Matching..."}</span>
+                          <span className="font-mono text-emerald-400 font-bold">
+                            OTP: {ticket.pickupOtp}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => advanceTicketStage(ticket.id)}
+                          className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Mark Ready for Courier Pickup
+                        </button>
+                      </div>
+                    );
+                  })}
 
                 {preparingCount === 0 && (
                   <div className="p-8 text-center bg-[#1C1511]/40 rounded-2xl border border-dashed border-[#2A1F18] text-[#766E65] text-xs">
@@ -470,7 +632,7 @@ export default function KitchenDashboardPage() {
               <div className="flex items-center justify-between pb-2 border-b border-[#2A1F18]">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
                     3. Ready For Pickup
                   </h3>
                 </div>
@@ -482,41 +644,178 @@ export default function KitchenDashboardPage() {
               <div className="space-y-4">
                 {tickets
                   .filter((t) => t.stage === "ready")
-                  .map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      className="bg-[#1C1511] rounded-2xl p-5 border border-emerald-500/30 shadow-lg space-y-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
-                            Packed & Sealed
-                          </span>
-                          <span className="text-sm font-bold text-white">{ticket.orderNumber}</span>
-                        </div>
-                        <div className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 font-mono font-bold text-xs">
-                          OTP {ticket.pickupOtp}
-                        </div>
-                      </div>
-
-                      <div className="text-xs text-[#C4B7AC] space-y-1">
-                        <p>Courier: <strong className="text-white">{ticket.riderName}</strong></p>
-                        <p>Customer: <strong className="text-white">{ticket.customerName}</strong></p>
-                      </div>
-
-                      <button
-                        onClick={() => advanceTicketStage(ticket.id)}
-                        className="w-full py-2.5 rounded-xl bg-[#2A1F18] hover:bg-[#3D2C22] text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  .map((ticket) => {
+                    const prefMeta = getDeliveryPreferenceMeta(ticket.deliveryPreference);
+                    return (
+                      <div
+                        key={ticket.id}
+                        className="bg-[#1C1511] rounded-2xl p-4 sm:p-5 border border-emerald-500/30 shadow-lg space-y-3.5"
                       >
-                        <Truck className="w-4 h-4 text-emerald-400" />
-                        Verify OTP & Handover to Courier
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
+                              Packed & Sealed
+                            </span>
+                            <span className="text-sm font-bold text-white">{ticket.orderNumber}</span>
+                          </div>
+                          <div className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 font-mono font-bold text-xs">
+                            OTP {ticket.pickupOtp}
+                          </div>
+                        </div>
+
+                        {/* Delivery Preference */}
+                        <div className="p-2.5 rounded-xl bg-[#2A1F18] border border-[#3D2C22] space-y-1">
+                          <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                            <span>{prefMeta.emoji}</span>
+                            <span>{prefMeta.title}</span>
+                          </span>
+                          {ticket.deliveryInstructions && (
+                            <p className="text-[11px] text-[#E5DDD4] italic bg-[#140E0A] p-2 rounded-lg border border-white/5">
+                              &ldquo;{ticket.deliveryInstructions}&rdquo;
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-[#C4B7AC] space-y-1">
+                          <p>Courier: <strong className="text-white">{ticket.riderName}</strong></p>
+                          <p>Customer: <strong className="text-white">{ticket.customerName}</strong></p>
+                        </div>
+
+                        <button
+                          onClick={() => advanceTicketStage(ticket.id)}
+                          className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                        >
+                          <Truck className="w-4 h-4" />
+                          Verify OTP & Dispatch Courier
+                        </button>
+                      </div>
+                    );
+                  })}
 
                 {readyCount === 0 && (
                   <div className="p-8 text-center bg-[#1C1511]/40 rounded-2xl border border-dashed border-[#2A1F18] text-[#766E65] text-xs">
                     No orders waiting on courier handoff.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Column 4: Active Dispatch & Delivery Partner Handover */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-[#2A1F18]">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                    4. Active Dispatch & Handover
+                  </h3>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold">
+                  {dispatchCount}
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {tickets
+                  .filter((t) => t.stage === "dispatched" || t.stage === "arrived")
+                  .map((ticket) => {
+                    const prefMeta = getDeliveryPreferenceMeta(ticket.deliveryPreference);
+                    const isArrived = ticket.stage === "arrived";
+
+                    return (
+                      <div
+                        key={ticket.id}
+                        className={`rounded-2xl p-4 sm:p-5 border shadow-lg space-y-3.5 transition-all ${
+                          isArrived
+                            ? "bg-[#251A13] border-amber-500/60 ring-2 ring-amber-500/30"
+                            : "bg-[#1C1511] border-blue-500/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span
+                              className={`text-[10px] font-bold uppercase tracking-wider block ${
+                                isArrived ? "text-amber-400" : "text-blue-400"
+                              }`}
+                            >
+                              {isArrived ? "📍 Partner Arrived at Location" : "🚴 Partner En Route"}
+                            </span>
+                            <span className="text-sm font-bold text-white">{ticket.orderNumber}</span>
+                          </div>
+                          <span className="text-xs text-[#9E948C]">
+                            {ticket.riderName || "Vikram R."}
+                          </span>
+                        </div>
+
+                        {/* Delivery Instructions Showcase for Courier */}
+                        <div className="p-2.5 rounded-xl bg-[#2A1F18] border border-[#3D2C22] space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                              <span>{prefMeta.emoji}</span>
+                              <span>{prefMeta.title}</span>
+                            </span>
+                            {prefMeta.isContactless && (
+                              <span className="text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">
+                                Contactless
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#A3988E]">
+                            {prefMeta.description}
+                          </p>
+                          {ticket.deliveryInstructions ? (
+                            <p className="text-xs text-white font-medium italic bg-[#140E0A] p-2 rounded-lg border border-amber-500/30">
+                              &ldquo;{ticket.deliveryInstructions}&rdquo;
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-[#766E65] italic">
+                              (No additional instructions provided)
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Address */}
+                        <div className="text-[11px] text-[#C4B7AC] flex items-start gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#FF4D2D] shrink-0 mt-0.5" />
+                          <span>{ticket.deliveryAddress || "Bandra West, Mumbai"}</span>
+                        </div>
+
+                        {/* Partner Action Workflow */}
+                        {!isArrived ? (
+                          <button
+                            onClick={() => advanceTicketStage(ticket.id, "arrived")}
+                            className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                          >
+                            <MapPin className="w-4 h-4" />
+                            Mark Partner Arrived at Doorstep
+                          </button>
+                        ) : (
+                          <div className="space-y-2">
+                            {prefMeta.isContactless ? (
+                              <button
+                                onClick={() => advanceTicketStage(ticket.id, "delivered")}
+                                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                              >
+                                <DoorOpen className="w-4 h-4" />
+                                Confirm Left at Doorstep & Photo Sent
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => advanceTicketStage(ticket.id, "delivered")}
+                                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                              >
+                                <UserCheck className="w-4 h-4" />
+                                Confirm Handed to Customer
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                {dispatchCount === 0 && (
+                  <div className="p-8 text-center bg-[#1C1511]/40 rounded-2xl border border-dashed border-[#2A1F18] text-[#766E65] text-xs">
+                    No active dispatches currently on the road.
                   </div>
                 )}
               </div>

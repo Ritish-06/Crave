@@ -22,8 +22,19 @@ enum OrderStatus {
   PREPARING
   READY_FOR_PICKUP
   OUT_FOR_DELIVERY
+  APPROACHING
+  ARRIVED
   DELIVERED
   CANCELLED
+}
+
+enum DeliveryPreference {
+  RING_BELL
+  LEAVE_AT_DOORSTEP
+  HAND_TO_ME
+  CALL_ON_ARRIVAL
+  TEXT_ON_ARRIVAL
+  NO_RING_OR_KNOCK
 }
 
 enum PaymentStatus {
@@ -291,6 +302,8 @@ model Order {
   riderName            String?
   riderPhone           String?
   estimatedDelivery    DateTime?
+  deliveryPreference   DeliveryPreference @default(RING_BELL)
+  deliveryInstructions String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 

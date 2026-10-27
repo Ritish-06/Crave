@@ -9,18 +9,24 @@ import {
   MapPin,
   CreditCard,
   QrCode,
-  Banknote,
   Building,
   CheckCircle2,
   Lock,
   ArrowRight,
   ShoppingBag,
   Sparkles,
+  Bell,
+  DoorOpen,
+  UserCheck,
+  PhoneCall,
+  MessageSquare,
+  VolumeX,
   AlertCircle
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useLocation } from "@/context/LocationContext";
-import { OrderRecord } from "@/types";
+import { OrderRecord, DeliveryPreferenceType } from "@/types";
+import { DeliveryPreferencesSelector } from "@/components/checkout/DeliveryPreferencesSelector";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -38,10 +44,12 @@ export default function CheckoutPage() {
     clearCart
   } = useCart();
 
-  const { currentLocation, savedAddresses } = useLocation();
+  const { currentLocation } = useLocation();
 
   const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | "cod" | "netbanking">("upi");
   const [upiId, setUpiId] = useState("");
+  const [deliveryPreference, setDeliveryPreference] = useState<DeliveryPreferenceType>("RING_BELL");
+  const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState<OrderRecord | null>(null);
 
@@ -91,6 +99,8 @@ export default function CheckoutPage() {
           pincode: currentLocation.pincode,
           addressLine: currentLocation.addressLine || `${currentLocation.locality}, ${currentLocation.city}`
         },
+        deliveryPreference,
+        deliveryInstructions: deliveryInstructions.trim() || undefined,
         paymentMethod,
         paymentStatus: "paid",
         estimatedDeliveryTime: "25 - 30 mins",
@@ -98,7 +108,7 @@ export default function CheckoutPage() {
         riderPhone: "+91 98450 11234"
       };
 
-      // Save to order history
+      // Save to order history & active order
       try {
         const existingOrders = JSON.parse(localStorage.getItem("crave_orders") || "[]");
         localStorage.setItem("crave_orders", JSON.stringify([newOrder, ...existingOrders]));
@@ -116,20 +126,29 @@ export default function CheckoutPage() {
         origin: { y: 0.6 },
         colors: ["#FF4D2D", "#16A34A", "#FFD700", "#140E0A"]
       });
-    }, 1200);
+    }, 1100);
+  };
+
+  const preferenceTitles: Record<DeliveryPreferenceType, string> = {
+    RING_BELL: "🔔 Ring the Bell",
+    LEAVE_AT_DOORSTEP: "🚪 Leave at Doorstep (Contactless)",
+    HAND_TO_ME: "🙋 Hand It to Me",
+    CALL_ON_ARRIVAL: "📞 Call When Arrived",
+    TEXT_ON_ARRIVAL: "📱 Text Me on Arrival",
+    NO_RING_OR_KNOCK: "🤫 Don’t Ring or Knock (Quiet)"
   };
 
   if (orderConfirmed) {
     return (
       <div className="min-h-screen bg-[#FAF8F5] py-16 px-4">
-        <div className="max-w-xl mx-auto bg-white rounded-3xl p-8 border border-[#EBE5DF] shadow-xl text-center space-y-6">
-          <div className="w-20 h-20 rounded-3xl bg-[#ECFDF5] text-[#16A34A] mx-auto flex items-center justify-center">
+        <div className="max-w-xl mx-auto bg-white rounded-3xl p-8 border border-[#EBE5DF] shadow-xl text-center space-y-6 animate-in zoom-in-95 duration-300">
+          <div className="w-20 h-20 rounded-3xl bg-[#ECFDF5] text-[#16A34A] mx-auto flex items-center justify-center shadow-xs">
             <CheckCircle2 className="w-10 h-10" />
           </div>
 
           <div>
             <span className="text-xs font-bold text-[#16A34A] uppercase tracking-wider">
-              Order Confirmed & Verified
+              Order Confirmed & Sent to Kitchen
             </span>
             <h1 className="text-3xl font-black text-[#1A1715] mt-1 font-sans">
               Every Bite, An Experience!
@@ -139,16 +158,37 @@ export default function CheckoutPage() {
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] text-xs space-y-2 text-left">
+          <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] text-xs space-y-2.5 text-left">
             <div className="flex justify-between font-semibold text-[#1A1715]">
               <span>Kitchen Partner</span>
               <span>{orderConfirmed.restaurantName}</span>
             </div>
             <div className="flex justify-between text-[#766E65]">
-              <span>Delivery To</span>
+              <span>Delivery Destination</span>
               <span>{orderConfirmed.deliveryAddress.locality} ({orderConfirmed.deliveryAddress.pincode})</span>
             </div>
-            <div className="flex justify-between text-[#766E65]">
+
+            {/* Delivery Preference Tag */}
+            <div className="flex items-center justify-between pt-1 border-t border-[#EBE5DF]">
+              <span className="text-[#766E65]">Delivery Preference</span>
+              <span className="font-bold text-[#1A1715]">
+                {preferenceTitles[orderConfirmed.deliveryPreference || "RING_BELL"]}
+              </span>
+            </div>
+
+            {/* Additional Delivery Instructions */}
+            {orderConfirmed.deliveryInstructions && (
+              <div className="p-2.5 rounded-xl bg-white border border-[#E5DDD4] text-[#1A1715]">
+                <span className="text-[10px] font-bold text-[#9E948C] block uppercase tracking-wider">
+                  Courier Instructions:
+                </span>
+                <p className="font-medium text-xs mt-0.5 italic">
+                  &ldquo;{orderConfirmed.deliveryInstructions}&rdquo;
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-between text-[#766E65] pt-1">
               <span>Estimated Arrival</span>
               <span className="text-[#FF4D2D] font-bold">{orderConfirmed.estimatedDeliveryTime}</span>
             </div>
@@ -161,14 +201,14 @@ export default function CheckoutPage() {
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Link
               href="/live-tracker"
-              className="flex-1 py-3.5 rounded-2xl bg-[#FF4D2D] hover:bg-[#E03A1A] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-3.5 rounded-2xl bg-[#FF4D2D] hover:bg-[#E03A1A] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Track Live Order</span>
+              <span>Track Live Delivery</span>
             </Link>
             <Link
               href="/explore"
-              className="flex-1 py-3.5 rounded-2xl bg-[#1A1715] hover:bg-black text-white font-bold text-sm transition-all"
+              className="flex-1 py-3.5 rounded-2xl bg-[#1A1715] hover:bg-black text-white font-bold text-sm transition-all flex items-center justify-center cursor-pointer"
             >
               Continue Exploring
             </Link>
@@ -186,9 +226,9 @@ export default function CheckoutPage() {
         </h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8 items-start">
-          {/* Left Form: Delivery Address & Payment Method */}
+          {/* Left Form: Delivery Address, Delivery Preferences, and Payment Method */}
           <div className="lg:col-span-7 space-y-6">
-            {/* Delivery Location Section */}
+            {/* 1. Delivery Location Section */}
             <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-[#1A1715] flex items-center gap-2">
@@ -211,11 +251,19 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* Payment Method Selector */}
+            {/* 2. Delivery Preferences Section */}
+            <DeliveryPreferencesSelector
+              selectedPreference={deliveryPreference}
+              onSelectPreference={(pref) => setDeliveryPreference(pref)}
+              instructions={deliveryInstructions}
+              onChangeInstructions={(text) => setDeliveryInstructions(text)}
+            />
+
+            {/* 3. Payment Method Selector */}
             <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-4">
               <h3 className="text-base font-bold text-[#1A1715] flex items-center gap-2">
                 <Lock className="w-4 h-4 text-[#FF4D2D]" />
-                <span>2. Select Payment Method (India Focused)</span>
+                <span>3. Select Payment Method (India Focused)</span>
               </h3>
 
               <div className="space-y-3">
@@ -300,36 +348,13 @@ export default function CheckoutPage() {
                         <Building className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="font-bold text-sm text-[#1A1715]">Netbanking</p>
-                        <p className="text-xs text-[#766E65]">All major Indian banks supported</p>
+                        <p className="font-bold text-sm text-[#1A1715]">
+                          Net Banking (HDFC, ICICI, SBI, Axis)
+                        </p>
+                        <p className="text-xs text-[#766E65]">Direct bank gateway authorization</p>
                       </div>
                     </div>
                     {paymentMethod === "netbanking" && (
-                      <CheckCircle2 className="w-5 h-5 text-[#FF4D2D]" />
-                    )}
-                  </div>
-                </div>
-
-                {/* COD Option */}
-                <div
-                  onClick={() => setPaymentMethod("cod")}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                    paymentMethod === "cod"
-                      ? "bg-[#FFF5F2] border-[#FF4D2D] ring-1 ring-[#FF4D2D]"
-                      : "bg-[#FAF8F5] border-[#EBE5DF]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-white text-[#1A1715]">
-                        <Banknote className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm text-[#1A1715]">Cash on Delivery (COD)</p>
-                        <p className="text-xs text-[#766E65]">Pay at your doorstep via cash or UPI QR</p>
-                      </div>
-                    </div>
-                    {paymentMethod === "cod" && (
                       <CheckCircle2 className="w-5 h-5 text-[#FF4D2D]" />
                     )}
                   </div>
@@ -359,6 +384,21 @@ export default function CheckoutPage() {
                     <span className="font-black text-[#1A1715]">₹{item.totalPrice}</span>
                   </div>
                 ))}
+              </div>
+
+              {/* Delivery Preference Preview in Summary */}
+              <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] text-xs space-y-1">
+                <span className="text-[10px] font-bold text-[#9E948C] uppercase tracking-wider block">
+                  Delivery Preference:
+                </span>
+                <p className="font-bold text-[#1A1715]">
+                  {preferenceTitles[deliveryPreference]}
+                </p>
+                {deliveryInstructions && (
+                  <p className="text-[11px] text-[#766E65] italic truncate">
+                    &ldquo;{deliveryInstructions}&rdquo;
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2 text-xs text-[#766E65] border-t border-[#F3EFEA] pt-3">

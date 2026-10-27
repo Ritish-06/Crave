@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import confetti from "canvas-confetti";
 import {
@@ -21,13 +21,19 @@ import {
   VolumeX,
   KeyRound,
   Download,
-  AlertCircle
+  AlertCircle,
+  Bell,
+  DoorOpen,
+  Edit3
 } from "lucide-react";
-import { OrderRecord } from "@/types";
+import { OrderRecord, DeliveryPreferenceType } from "@/types";
 import { DeliveryRadarMap } from "@/components/tracker/DeliveryRadarMap";
 import { DeliveryOtpModal } from "@/components/tracker/DeliveryOtpModal";
 import { CourierTipModal } from "@/components/tracker/CourierTipModal";
 import { OrderSupportDrawer } from "@/components/tracker/OrderSupportDrawer";
+import { DeliveryInstructionsTrackerCard } from "@/components/tracker/DeliveryInstructionsTrackerCard";
+import { EditInstructionsModal } from "@/components/tracker/EditInstructionsModal";
+import { getDeliveryPreferenceMeta } from "@/data/deliveryPreferences";
 
 export default function LiveTrackerPage() {
   const [activeOrder, setActiveOrder] = useState<OrderRecord | null>(null);
@@ -37,6 +43,7 @@ export default function LiveTrackerPage() {
   const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
   const [isSupportDrawerOpen, setIsSupportDrawerOpen] = useState(false);
+  const [isEditInstructionsOpen, setIsEditInstructionsOpen] = useState(false);
   const [tipAmount, setTipAmount] = useState(30);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -47,17 +54,24 @@ export default function LiveTrackerPage() {
   const restaurantName = activeOrder?.restaurantName || "The Truffle & Brioche Co.";
   const orderNumber = activeOrder?.orderNumber || "CRV-894210";
 
-  // Synthesizer Web Audio API for harmonic milestone chimes (Zero bundle bloat)
-  const playAudioChime = (type: "confirm" | "dispatch" | "delivered") => {
+  // Delivery preference and instructions
+  const activePreference: DeliveryPreferenceType = activeOrder?.deliveryPreference || "RING_BELL";
+  const activeInstructions = activeOrder?.deliveryInstructions || "";
+  const preferenceMeta = getDeliveryPreferenceMeta(activePreference);
+
+  // Synthesizer Web Audio API for harmonic milestone chimes
+  const playAudioChime = (type: "confirm" | "dispatch" | "arrived" | "delivered") => {
     if (!soundEnabled || typeof window === "undefined") return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
 
       const freqs =
         type === "delivered"
-          ? [523.25, 659.25, 783.99, 1046.5] // C5, E5, G5, C6 (Celebration chord)
+          ? [523.25, 659.25, 783.99, 1046.5] // Celebration chord: C5, E5, G5, C6
+          : type === "arrived"
+          ? [587.33, 739.99, 880] // Arrival chime: D5, F#5, A5
           : type === "dispatch"
           ? [440.0, 554.37, 659.25] // A4, C#5, E5
           : [392.0, 523.25]; // G4, C5
@@ -81,9 +95,28 @@ export default function LiveTrackerPage() {
     } catch {}
   };
 
-  // Determine timeline step based on progress
+  // 6-stage delivery status flow:
+  // 1. Order confirmed (0 - 18%)
+  // 2. Restaurant is preparing your food (18 - 38%)
+  // 3. Order picked up (38 - 58%)
+  // 4. Delivery partner is approaching (58 - 82%)
+  // 5. Delivery partner has arrived (82 - 99%)
+  // 6. Order delivered (100%)
   const timelineStep =
-    progressPercent < 25 ? 1 : progressPercent < 50 ? 2 : progressPercent < 95 ? 3 : 4;
+    progressPercent < 18
+      ? 1
+      : progressPercent < 38
+      ? 2
+      : progressPercent < 58
+      ? 3
+      : progressPercent < 82
+      ? 4
+      : progressPercent < 100
+      ? 5
+      : 6;
+
+  const isDelivered = progressPercent >= 100;
+  const hasArrived = timelineStep === 5;
 
   // Auto-play simulation interval
   useEffect(() => {
@@ -102,6 +135,9 @@ export default function LiveTrackerPage() {
               origin: { y: 0.6 }
             });
             return 100;
+          }
+          if (prev < 82 && next >= 82) {
+            playAudioChime("arrived");
           }
           return next;
         });
@@ -130,10 +166,12 @@ export default function LiveTrackerPage() {
   }, []);
 
   const steps = [
-    { id: 1, title: "Order Confirmed", desc: "Kitchen received your ticket", icon: CheckCircle2 },
-    { id: 2, title: "Chef Preparing", desc: "Smash patties & artisanal assembly", icon: ChefHat },
-    { id: 3, title: "Out for Delivery", desc: "Courier on electric scooter", icon: Bike },
-    { id: 4, title: "Delivered", desc: "Enjoy every bite!", icon: Sparkles }
+    { id: 1, title: "Order Confirmed", desc: "Kitchen received your order ticket", icon: CheckCircle2 },
+    { id: 2, title: "Restaurant Preparing", desc: "Chef crafting artisanal dishes", icon: ChefHat },
+    { id: 3, title: "Order Picked Up", desc: "Sealed in thermal carrier bag", icon: ShoppingBag },
+    { id: 4, title: "Partner Approaching", desc: "Electric scooter en route to you", icon: Bike },
+    { id: 5, title: "Partner Arrived", desc: "Courier has arrived at your location", icon: MapPin },
+    { id: 6, title: "Order Delivered", desc: "Enjoy every bite!", icon: Sparkles }
   ];
 
   const handleVerifySuccess = () => {
@@ -149,6 +187,63 @@ export default function LiveTrackerPage() {
     if (amount > 0) {
       setToastMessage(`Added ₹${amount} tip for ${courierName}! ❤️`);
       setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
+  const handleUpdateInstructions = async (newPref: DeliveryPreferenceType, newInst: string) => {
+    setActiveOrder((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        deliveryPreference: newPref,
+        deliveryInstructions: newInst,
+      };
+    });
+
+    try {
+      const stored = localStorage.getItem("crave_active_order");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.deliveryPreference = newPref;
+        parsed.deliveryInstructions = newInst;
+        localStorage.setItem("crave_active_order", JSON.stringify(parsed));
+      }
+
+      const history = localStorage.getItem("crave_orders");
+      if (history) {
+        const list = JSON.parse(history);
+        const updated = list.map((ord: OrderRecord) => {
+          if (
+            (activeOrder?.id && ord.id === activeOrder.id) ||
+            (activeOrder?.orderNumber && ord.orderNumber === activeOrder.orderNumber)
+          ) {
+            return {
+              ...ord,
+              deliveryPreference: newPref,
+              deliveryInstructions: newInst,
+            };
+          }
+          return ord;
+        });
+        localStorage.setItem("crave_orders", JSON.stringify(updated));
+      }
+
+      if (activeOrder?.id) {
+        await fetch("/api/orders", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: activeOrder.id,
+            deliveryPreference: newPref,
+            deliveryInstructions: newInst,
+          }),
+        });
+      }
+
+      setToastMessage("Delivery instructions updated! Synced to courier partner.");
+      setTimeout(() => setToastMessage(null), 3500);
+    } catch (err) {
+      console.error("Failed to update instructions:", err);
     }
   };
 
@@ -190,6 +285,15 @@ export default function LiveTrackerPage() {
         orderNumber={orderNumber}
         restaurantName={restaurantName}
         courierName={courierName}
+      />
+
+      <EditInstructionsModal
+        isOpen={isEditInstructionsOpen}
+        onClose={() => setIsEditInstructionsOpen(false)}
+        currentPreference={activePreference}
+        currentInstructions={activeInstructions}
+        isDelivered={isDelivered}
+        onSave={handleUpdateInstructions}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-7">
@@ -244,6 +348,53 @@ export default function LiveTrackerPage() {
           </div>
         </div>
 
+        {/* Stage 5: Prominent Arrival Notification Banner */}
+        {hasArrived && (
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-[#FFF1EE] via-white to-[#FFF1EE] border-2 border-[#FF4D2D] shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-300">
+            <div className="flex items-center gap-4">
+              <div className="w-13 h-13 rounded-2xl bg-[#FF4D2D] text-white flex items-center justify-center shrink-0 shadow-lg ring-4 ring-[#FF4D2D]/20 animate-pulse">
+                <Bell className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                  <h3 className="text-base sm:text-lg font-black text-[#1A1715]">
+                    Your delivery partner has arrived!
+                  </h3>
+                </div>
+                <p className="text-xs text-[#554C43] mt-0.5">
+                  Your delivery preference:{" "}
+                  <strong className="text-[#FF4D2D] font-black">
+                    {preferenceMeta.emoji} {preferenceMeta.title}
+                  </strong>
+                  {activeInstructions ? (
+                    <span className="text-[#766E65]"> — &ldquo;{activeInstructions}&rdquo;</span>
+                  ) : (
+                    <span className="text-[#766E65]"> ({preferenceMeta.description})</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+              <button
+                onClick={() => setIsOtpModalOpen(true)}
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#FF4D2D] hover:bg-[#E03B1D] text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Show Handover PIN</span>
+              </button>
+              <a
+                href={`tel:${courierPhone}`}
+                className="px-3.5 py-2.5 rounded-xl bg-white border border-[#EBE5DF] hover:border-[#1A1715] text-[#1A1715] text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Call Courier</span>
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Real-Time GPS Delivery Radar Map */}
         <DeliveryRadarMap
           progressPercent={progressPercent}
@@ -255,6 +406,15 @@ export default function LiveTrackerPage() {
           onChangeSpeed={(s) => setPlaybackSpeed(s)}
           restaurantName={restaurantName}
           deliveryLocality="Bandra West, Mumbai"
+        />
+
+        {/* Delivery Instructions Showcase Card */}
+        <DeliveryInstructionsTrackerCard
+          preference={activePreference}
+          instructions={activeInstructions}
+          deliveryAddress={activeOrder?.deliveryAddress}
+          isDelivered={isDelivered}
+          onOpenEdit={() => setIsEditInstructionsOpen(true)}
         />
 
         {/* Courier Info & Live Communication Deck */}
@@ -347,18 +507,23 @@ export default function LiveTrackerPage() {
           </div>
         </div>
 
-        {/* Order Lifecycle Progression Steps */}
+        {/* 6-Stage Order Lifecycle Progression Steps */}
         <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-black text-[#1A1715]">
-              Order Lifecycle Milestones
-            </h3>
-            <span className="text-xs text-[#766E65]">
-              Stage {timelineStep} of 4 Completed
+            <div>
+              <h3 className="text-base font-black text-[#1A1715]">
+                Order Lifecycle Milestones
+              </h3>
+              <p className="text-xs text-[#766E65]">
+                Continuous real-time dispatch telematics
+              </p>
+            </div>
+            <span className="text-xs font-bold text-[#FF4D2D] px-2.5 py-1 rounded-xl bg-[#FFF1EE]">
+              Stage {timelineStep} of 6 Completed
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {steps.map((st) => {
               const Icon = st.icon;
               const isPast = timelineStep >= st.id;
@@ -367,7 +532,7 @@ export default function LiveTrackerPage() {
               return (
                 <div
                   key={st.id}
-                  className={`p-4 rounded-2xl border transition-all ${
+                  className={`p-3.5 rounded-2xl border transition-all ${
                     isCurrent
                       ? "bg-[#FFF5F2] border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30 shadow-md"
                       : isPast
@@ -388,13 +553,13 @@ export default function LiveTrackerPage() {
                       <Icon className="w-4 h-4" />
                     </div>
                     {isCurrent && (
-                      <span className="text-[10px] font-black text-[#FF4D2D] uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#FFF1EE]">
-                        Live Now
+                      <span className="text-[9px] font-black text-[#FF4D2D] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FFF1EE]">
+                        Live
                       </span>
                     )}
                   </div>
-                  <h4 className="font-bold text-sm text-[#1A1715]">{st.title}</h4>
-                  <p className="text-xs text-[#766E65] mt-0.5 leading-relaxed">{st.desc}</p>
+                  <h4 className="font-bold text-xs text-[#1A1715]">{st.title}</h4>
+                  <p className="text-[11px] text-[#766E65] mt-0.5 leading-snug">{st.desc}</p>
                 </div>
               );
             })}
@@ -402,22 +567,37 @@ export default function LiveTrackerPage() {
 
           {/* Dev State Step Switcher */}
           <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-[#766E65] border-t border-[#F3EFEA]">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold">Simulate Milestones:</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold mr-1">Simulate Milestones:</span>
               {[
-                { step: 1, pct: 15, label: "Step 1: Confirmed" },
-                { step: 2, pct: 40, label: "Step 2: Cooking" },
-                { step: 3, pct: 75, label: "Step 3: Dispatched" },
-                { step: 4, pct: 100, label: "Step 4: Delivered" }
+                { step: 1, pct: 10, label: "1: Confirmed" },
+                { step: 2, pct: 28, label: "2: Preparing" },
+                { step: 3, pct: 48, label: "3: Picked Up" },
+                { step: 4, pct: 70, label: "4: Approaching" },
+                { step: 5, pct: 90, label: "5: Arrived" },
+                { step: 6, pct: 100, label: "6: Delivered" }
               ].map((s) => (
                 <button
                   key={s.step}
                   onClick={() => {
                     setProgressPercent(s.pct);
                     setIsPlaying(false);
-                    playAudioChime(s.step === 4 ? "delivered" : s.step === 3 ? "dispatch" : "confirm");
+                    if (s.step === 6) {
+                      playAudioChime("delivered");
+                      confetti({
+                        particleCount: 50,
+                        spread: 60,
+                        origin: { y: 0.6 }
+                      });
+                    } else if (s.step === 5) {
+                      playAudioChime("arrived");
+                    } else if (s.step >= 3) {
+                      playAudioChime("dispatch");
+                    } else {
+                      playAudioChime("confirm");
+                    }
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     timelineStep === s.step
                       ? "bg-[#1A1715] text-white shadow-xs"
                       : "bg-[#F3EFEA] text-[#766E65] hover:bg-[#EBE5DF]"
@@ -449,7 +629,7 @@ export default function LiveTrackerPage() {
                 Order Invoice & Receipt
               </h3>
               <p className="text-xs text-[#766E65]">
-                Billed to your default address • FSSAI Lic #11522000000456
+                Billed to your verified address • FSSAI Lic #11522000000456
               </p>
             </div>
 
@@ -489,7 +669,6 @@ export default function LiveTrackerPage() {
                 </div>
               ))
             ) : (
-              /* Fallback Signature Truffle Smash sample receipt */
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs py-2 border-b border-[#F3EFEA]">
                   <div>

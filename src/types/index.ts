@@ -124,11 +124,19 @@ export interface CartItem {
   totalPrice: number;
 }
 
+export type DeliveryPreferenceType =
+  | 'RING_BELL'
+  | 'LEAVE_AT_DOORSTEP'
+  | 'HAND_TO_ME'
+  | 'CALL_ON_ARRIVAL'
+  | 'TEXT_ON_ARRIVAL'
+  | 'NO_RING_OR_KNOCK';
+
 export interface OrderRecord {
   id: string;
   orderNumber: string;
   createdAt: string;
-  status: 'placed' | 'confirmed' | 'preparing' | 'ready_for_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled';
+  status: 'placed' | 'confirmed' | 'preparing' | 'ready_for_pickup' | 'out_for_delivery' | 'approaching' | 'arrived' | 'delivered' | 'cancelled';
   items: CartItem[];
   subtotal: number;
   deliveryFee: number;
@@ -141,6 +149,8 @@ export interface OrderRecord {
   paymentMethod: 'upi' | 'card' | 'cod' | 'netbanking';
   paymentStatus: 'paid' | 'pending' | 'failed';
   estimatedDeliveryTime: string;
+  deliveryPreference?: DeliveryPreferenceType;
+  deliveryInstructions?: string;
   riderName?: string;
   riderPhone?: string;
   riderLat?: number;
