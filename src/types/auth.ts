@@ -5,6 +5,8 @@ export interface AuthUser {
   phone?: string;
   role: "customer" | "admin" | "kitchen";
   createdAt: string;
+  avatarUrl?: string;
+  authProvider?: "password" | "phone_otp" | "google" | "apple";
 }
 
 export interface LoginCredentials {
@@ -19,10 +21,27 @@ export interface SignupData {
   password: string;
 }
 
+export interface SendOtpPayload {
+  phone: string;
+}
+
+export interface VerifyOtpPayload {
+  phone: string;
+  otp: string;
+}
+
+export interface OAuthPayload {
+  provider: "google" | "apple";
+  email: string;
+  name: string;
+  avatarUrl?: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   user?: AuthUser;
   error?: string;
+  testOtp?: string;
 }
 
 export type PendingActionType =

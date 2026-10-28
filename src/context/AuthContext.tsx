@@ -11,6 +11,12 @@ interface AuthContextType {
   pendingActionDescription: string | null;
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
   signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
+  sendPhoneOtp: (phone: string) => Promise<{ success: boolean; error?: string; testOtp?: string }>;
+  verifyPhoneOtp: (phone: string, otp: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithOAuth: (
+    provider: "google" | "apple",
+    profile?: { email: string; name: string; avatarUrl?: string }
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   /**
    * Guards any ordering action.
@@ -123,6 +129,95 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [executePendingAction]
   );
 
+  const sendPhoneOtp = useCallback(
+    async (phone: string): Promise<{ success: boolean; error?: string; testOtp?: string }> => {
+      try {
+        const res = await fetch("/api/auth/otp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+        if (data.success) {
+          return { success: true, testOtp: data.testOtp };
+        }
+        return { success: false, error: data.error || "Failed to send OTP." };
+      } catch {
+        return { success: false, error: "Network error sending OTP." };
+      }
+    },
+    []
+  );
+
+  const verifyPhoneOtp = useCallback(
+    async (phone: string, otp: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const res = await fetch("/api/auth/otp/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, otp })
+        });
+        const data = await res.json();
+        if (data.success && data.user) {
+          setUser(data.user);
+          setLoginModalOpen(false);
+          setTimeout(() => {
+            executePendingAction();
+          }, 100);
+          return { success: true };
+        }
+        return { success: false, error: data.error || "OTP verification failed." };
+      } catch {
+        return { success: false, error: "Network error during verification." };
+      }
+    },
+    [executePendingAction]
+  );
+
+  const loginWithOAuth = useCallback(
+    async (
+      provider: "google" | "apple",
+      profile?: { email: string; name: string; avatarUrl?: string }
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const defaultProfile =
+          provider === "google"
+            ? {
+                email: "ritish.google@gmail.com",
+                name: "Ritish Sharma (Google)",
+                avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop"
+              }
+            : {
+                email: "ritish.apple@icloud.com",
+                name: "Ritish Sharma (Apple)"
+              };
+
+        const res = await fetch("/api/auth/oauth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider,
+            ...(profile || defaultProfile)
+          })
+        });
+
+        const data = await res.json();
+        if (data.success && data.user) {
+          setUser(data.user);
+          setLoginModalOpen(false);
+          setTimeout(() => {
+            executePendingAction();
+          }, 100);
+          return { success: true };
+        }
+        return { success: false, error: data.error || "OAuth sign-in failed." };
+      } catch {
+        return { success: false, error: "Network error during OAuth sign-in." };
+      }
+    },
+    [executePendingAction]
+  );
+
   const logout = useCallback(async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -160,6 +255,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pendingActionDescription,
         login,
         signup,
+        sendPhoneOtp,
+        verifyPhoneOtp,
+        loginWithOAuth,
         logout,
         requireAuth,
         cancelPendingAction

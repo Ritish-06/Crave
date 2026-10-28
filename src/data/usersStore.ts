@@ -140,3 +140,109 @@ export function createUser(data: {
   const { passwordHash: _, salt: __, ...publicUser } = newUser;
   return { user: publicUser };
 }
+
+// In-memory OTP store (phone -> { otp, expiresAt })
+const otpStore: Map<string, { otp: string; expiresAt: number }> = new Map();
+
+export function sendPhoneOtp(rawPhone: string): { otp: string; success: boolean; error?: string } {
+  const cleanPhone = rawPhone.trim().replace(/\s+/g, "");
+  if (cleanPhone.length < 10) {
+    return { otp: "", success: false, error: "Please enter a valid 10-digit mobile number." };
+  }
+
+  // Generate 6-digit numeric OTP
+  const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+  otpStore.set(cleanPhone, { otp: generatedOtp, expiresAt });
+  return { otp: generatedOtp, success: true };
+}
+
+export function verifyPhoneOtp(
+  rawPhone: string,
+  inputOtp: string
+): { user?: AuthUser; error?: string } {
+  const cleanPhone = rawPhone.trim().replace(/\s+/g, "");
+  const trimmedOtp = inputOtp.trim();
+
+  const record = otpStore.get(cleanPhone);
+  const isDemoCode = trimmedOtp === "123456";
+  const isValid = (record && record.otp === trimmedOtp && Date.now() <= record.expiresAt) || isDemoCode;
+
+  if (!isValid) {
+    return { error: "Invalid or expired verification code. Use 123456 or request a new code." };
+  }
+
+  // Clear OTP once verified
+  otpStore.delete(cleanPhone);
+
+  const users = loadUsers();
+  const existingUser = users.find(
+    (u) => u.phone && u.phone.replace(/\s+/g, "") === cleanPhone
+  );
+
+  if (existingUser) {
+    const { passwordHash: _, salt: __, ...publicUser } = existingUser;
+    return { user: { ...publicUser, authProvider: "phone_otp" } };
+  }
+
+  // Auto-register new user with phone
+  const salt = generateSalt();
+  const passwordHash = hashPassword(generateSalt(), salt);
+  const suffix = cleanPhone.slice(-4);
+  const newUser: StoredUser = {
+    id: `user-phone-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    name: `Foodie (${suffix})`,
+    email: `phone.${suffix}@crave.local`,
+    phone: cleanPhone.startsWith("+") ? cleanPhone : `+91 ${cleanPhone}`,
+    role: "customer",
+    createdAt: new Date().toISOString(),
+    salt,
+    passwordHash,
+    authProvider: "phone_otp"
+  };
+
+  users.push(newUser);
+  saveUsers(users);
+
+  const { passwordHash: _, salt: __, ...publicUser } = newUser;
+  return { user: publicUser };
+}
+
+export function findOrCreateOAuthUser(
+  provider: "google" | "apple",
+  profile: { email: string; name: string; avatarUrl?: string }
+): AuthUser {
+  const users = loadUsers();
+  const cleanEmail = profile.email.trim().toLowerCase();
+
+  const existing = users.find((u) => u.email.toLowerCase() === cleanEmail);
+  if (existing) {
+    if (!existing.avatarUrl && profile.avatarUrl) {
+      existing.avatarUrl = profile.avatarUrl;
+      saveUsers(users);
+    }
+    const { passwordHash: _, salt: __, ...publicUser } = existing;
+    return { ...publicUser, authProvider: provider };
+  }
+
+  const salt = generateSalt();
+  const passwordHash = hashPassword(generateSalt(), salt);
+  const newUser: StoredUser = {
+    id: `user-${provider}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    name: profile.name.trim() || `${provider.toUpperCase()} Foodie`,
+    email: cleanEmail,
+    role: "customer",
+    createdAt: new Date().toISOString(),
+    salt,
+    passwordHash,
+    avatarUrl: profile.avatarUrl,
+    authProvider: provider
+  };
+
+  users.push(newUser);
+  saveUsers(users);
+
+  const { passwordHash: _, salt: __, ...publicUser } = newUser;
+  return publicUser;
+}

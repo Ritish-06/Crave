@@ -16,7 +16,7 @@ const ALLOWED_PREFERENCES: DeliveryPreferenceType[] = [
 interface CreateOrderPayload {
   items: CartItem[];
   deliveryAddress: SavedAddress;
-  paymentMethod: "upi" | "card" | "cod" | "netbanking";
+  paymentMethod: "upi" | "card" | "cod" | "netbanking" | "razorpay" | "stripe";
   couponCode?: string;
   notes?: string;
   deliveryPreference?: DeliveryPreferenceType;

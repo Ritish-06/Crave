@@ -146,7 +146,7 @@ export interface OrderRecord {
   restaurantId: string;
   restaurantName: string;
   deliveryAddress: SavedAddress;
-  paymentMethod: 'upi' | 'card' | 'cod' | 'netbanking';
+  paymentMethod: 'upi' | 'card' | 'cod' | 'netbanking' | 'razorpay' | 'stripe';
   paymentStatus: 'paid' | 'pending' | 'failed';
   estimatedDeliveryTime: string;
   deliveryPreference?: DeliveryPreferenceType;

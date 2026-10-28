@@ -21,12 +21,20 @@ import {
   PhoneCall,
   MessageSquare,
   VolumeX,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  Home,
+  Briefcase,
+  Navigation,
+  Check,
+  Smartphone
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useLocation } from "@/context/LocationContext";
 import { OrderRecord, DeliveryPreferenceType, SavedAddress } from "@/types";
 import { DeliveryPreferencesSelector } from "@/components/checkout/DeliveryPreferencesSelector";
+import { AddAddressModal } from "@/components/checkout/AddAddressModal";
+import { PaymentGatewayModal } from "@/components/checkout/PaymentGatewayModal";
 import { useAuth } from "@/context/AuthContext";
 
 export default function CheckoutPage() {
@@ -46,14 +54,20 @@ export default function CheckoutPage() {
     clearCart
   } = useCart();
 
-  const { currentLocation } = useLocation();
+  const { currentLocation, savedAddresses, saveNewAddress, selectSavedAddress } = useLocation();
 
-  const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | "cod" | "netbanking">("upi");
+  const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "stripe" | "upi" | "card" | "cod" | "netbanking">("razorpay");
   const [upiId, setUpiId] = useState("");
   const [deliveryPreference, setDeliveryPreference] = useState<DeliveryPreferenceType>("RING_BELL");
   const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState<OrderRecord | null>(null);
+
+  // Address and Payment Modals
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [isAddressPickerOpen, setIsAddressPickerOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [pendingOrderId, setPendingOrderId] = useState<string>("");
 
   if (items.length === 0 && !orderConfirmed) {
     return (
@@ -73,87 +87,101 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     requireAuth(async () => {
-      setIsProcessing(true);
-
       const orderId = "CRV-" + Math.floor(100000 + Math.random() * 900000);
-      const orderAddress: SavedAddress = {
-        id: "addr-order",
-        tag: "Home",
-        recipientName: user?.name || "Customer",
-        phone: user?.phone || "+91 98201 44521",
-        state: currentLocation.state,
-        district: currentLocation.district,
-        city: currentLocation.city,
-        locality: currentLocation.locality,
-        pincode: currentLocation.pincode,
-        addressLine: currentLocation.addressLine || `${currentLocation.locality}, ${currentLocation.city}`
-      };
+      setPendingOrderId(orderId);
 
-      const newOrder: OrderRecord = {
-        id: orderId,
-        orderNumber: orderId,
-        createdAt: new Date().toISOString(),
-        status: "confirmed",
-        items: [...items],
-        subtotal,
-        deliveryFee,
-        tax: taxAmount,
-        discount: discountAmount,
-        total: grandTotal,
-        restaurantId: cartRestaurantId || "rst-1",
-        restaurantName: cartRestaurantName || "The Truffle & Brioche Co.",
-        deliveryAddress: orderAddress,
-        deliveryPreference,
-        deliveryInstructions: deliveryInstructions.trim() || undefined,
-        paymentMethod,
-        paymentStatus: "paid",
-        estimatedDeliveryTime: "25 - 30 mins",
-        riderName: "Vikram R. (CRAVE Courier)",
-        riderPhone: "+91 98450 11234"
-      };
-
-      try {
-        // Server-side order creation & allowlist validation
-        const response = await fetch("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items,
-            deliveryAddress: orderAddress,
-            paymentMethod,
-            deliveryPreference,
-            deliveryInstructions: deliveryInstructions.trim() || undefined,
-          }),
-        });
-
-        if (response.status === 401) {
-          setIsProcessing(false);
-          setLoginModalOpen(true);
-          return;
-        }
-      } catch (err) {
-        console.error("Order submission error:", err);
+      if (paymentMethod === "razorpay" || paymentMethod === "stripe") {
+        setIsPaymentModalOpen(true);
+        return;
       }
 
-      // Save to client order history & active order
-      try {
-        const existingOrders = JSON.parse(localStorage.getItem("crave_orders") || "[]");
-        localStorage.setItem("crave_orders", JSON.stringify([newOrder, ...existingOrders]));
-        localStorage.setItem("crave_active_order", JSON.stringify(newOrder));
-      } catch {}
-
-      clearCart();
-      setIsProcessing(false);
-      setOrderConfirmed(newOrder);
-
-      // Confetti celebration
-      confetti({
-        particleCount: 80,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ["#FF4D2D", "#16A34A", "#FFD700", "#140E0A"]
-      });
+      await finalizeOrder(orderId, paymentMethod, paymentMethod === "cod" ? "pending" : "paid");
     }, "complete and place your order");
+  };
+
+  const finalizeOrder = async (
+    orderId: string,
+    method: "razorpay" | "stripe" | "upi" | "card" | "cod" | "netbanking",
+    status: "paid" | "pending"
+  ) => {
+    setIsProcessing(true);
+
+    const orderAddress: SavedAddress = {
+      id: "addr-order",
+      tag: "Home",
+      recipientName: user?.name || "Customer",
+      phone: user?.phone || "+91 98201 44521",
+      state: currentLocation.state,
+      district: currentLocation.district,
+      city: currentLocation.city,
+      locality: currentLocation.locality,
+      pincode: currentLocation.pincode,
+      addressLine: currentLocation.addressLine || `${currentLocation.locality}, ${currentLocation.city}`
+    };
+
+    const newOrder: OrderRecord = {
+      id: orderId,
+      orderNumber: orderId,
+      createdAt: new Date().toISOString(),
+      status: "confirmed",
+      items: [...items],
+      subtotal,
+      deliveryFee,
+      tax: taxAmount,
+      discount: discountAmount,
+      total: grandTotal,
+      restaurantId: cartRestaurantId || "rst-1",
+      restaurantName: cartRestaurantName || "The Truffle & Brioche Co.",
+      deliveryAddress: orderAddress,
+      deliveryPreference,
+      deliveryInstructions: deliveryInstructions.trim() || undefined,
+      paymentMethod: method,
+      paymentStatus: status,
+      estimatedDeliveryTime: "25 - 30 mins",
+      riderName: "Vikram R. (CRAVE Courier)",
+      riderPhone: "+91 98450 11234"
+    };
+
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items,
+          deliveryAddress: orderAddress,
+          paymentMethod: method,
+          deliveryPreference,
+          deliveryInstructions: deliveryInstructions.trim() || undefined,
+        }),
+      });
+
+      if (response.status === 401) {
+        setIsProcessing(false);
+        setIsPaymentModalOpen(false);
+        setLoginModalOpen(true);
+        return;
+      }
+    } catch (err) {
+      console.error("Order submission error:", err);
+    }
+
+    try {
+      const existingOrders = JSON.parse(localStorage.getItem("crave_orders") || "[]");
+      localStorage.setItem("crave_orders", JSON.stringify([newOrder, ...existingOrders]));
+      localStorage.setItem("crave_active_order", JSON.stringify(newOrder));
+    } catch {}
+
+    clearCart();
+    setIsProcessing(false);
+    setIsPaymentModalOpen(false);
+    setOrderConfirmed(newOrder);
+
+    confetti({
+      particleCount: 80,
+      spread: 80,
+      origin: { y: 0.6 },
+      colors: ["#FF4D2D", "#16A34A", "#FFD700", "#140E0A"]
+    });
   };
 
   const preferenceTitles: Record<DeliveryPreferenceType, string> = {
@@ -296,27 +324,106 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 items-start">
           {/* Left Form: Delivery Address, Delivery Preferences, and Payment Method */}
           <div className="lg:col-span-7 space-y-6">
-            {/* 1. Delivery Location Section */}
-            <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-3">
+            {/* 1. Delivery Location & Multi-Address Section */}
+            <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-[#1A1715] flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-[#FF4D2D]" />
-                  <span>1. Delivery Address</span>
+                  <span>1. Delivery Destination</span>
                 </h3>
-                <span className="text-xs font-semibold text-[#16A34A] bg-[#ECFDF5] px-2.5 py-0.5 rounded-md">
-                  Coverage Verified
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddressPickerOpen(!isAddressPickerOpen)}
+                    className="text-xs font-bold text-[#FF4D2D] hover:underline cursor-pointer"
+                  >
+                    {isAddressPickerOpen ? "Close List" : "Switch Address"}
+                  </button>
+                  <span className="text-xs font-semibold text-[#16A34A] bg-[#ECFDF5] px-2.5 py-0.5 rounded-md">
+                    Coverage Verified
+                  </span>
+                </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EBE5DF] text-xs space-y-1">
-                <p className="font-bold text-[#1A1715]">
+              {/* Selected Active Address Card */}
+              <div className="p-4 rounded-2xl bg-[#FAF8F5] border-2 border-[#1A1715] text-xs space-y-1 relative shadow-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-2 py-0.5 rounded-md bg-[#1A1715] text-white text-[10px] font-bold uppercase tracking-wider">
+                    Active Delivery Destination
+                  </span>
+                  <span className="text-[11px] font-bold text-[#1A1715]">
+                    PIN: {currentLocation.pincode}
+                  </span>
+                </div>
+                <p className="font-bold text-sm text-[#1A1715]">
                   {currentLocation.locality || currentLocation.city}
                 </p>
                 <p className="text-[#766E65]">
                   {currentLocation.addressLine || `${currentLocation.locality}, ${currentLocation.district}, ${currentLocation.state}`}
                 </p>
-                <p className="text-[#9E948C]">PIN Code: {currentLocation.pincode}</p>
               </div>
+
+              {/* Multi-Address Selector & Add New Address */}
+              {isAddressPickerOpen && (
+                <div className="space-y-3 pt-2 border-t border-[#EBE5DF] animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#1A1715]">Your Saved Addresses ({savedAddresses.length})</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddressModalOpen(true)}
+                      className="text-xs font-bold text-[#FF4D2D] flex items-center gap-1 hover:underline cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add New Address</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {savedAddresses.map((addr) => {
+                      const isSelected =
+                        currentLocation.pincode === addr.pincode &&
+                        (currentLocation.locality === addr.locality || currentLocation.addressLine === addr.addressLine);
+                      return (
+                        <div
+                          key={addr.id}
+                          onClick={() => {
+                            selectSavedAddress(addr);
+                            setIsAddressPickerOpen(false);
+                          }}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer text-xs space-y-1 ${
+                            isSelected
+                              ? "bg-[#FFF5F2] border-[#FF4D2D] ring-1 ring-[#FF4D2D]"
+                              : "bg-white border-[#E5DDD4] hover:bg-[#FAF8F5]"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-[#1A1715] flex items-center gap-1.5">
+                              {addr.tag === "Home" && <Home className="w-3.5 h-3.5 text-[#FF4D2D]" />}
+                              {addr.tag === "Work" && <Briefcase className="w-3.5 h-3.5 text-[#2563EB]" />}
+                              {addr.tag === "Other" && <Navigation className="w-3.5 h-3.5 text-[#16A34A]" />}
+                              <span>{addr.tag}</span>
+                            </span>
+                            {isSelected && <Check className="w-4 h-4 text-[#FF4D2D]" />}
+                          </div>
+                          <p className="font-semibold text-[#1A1715] truncate">{addr.locality}</p>
+                          <p className="text-[11px] text-[#766E65] truncate">{addr.addressLine}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {!isAddressPickerOpen && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddressModalOpen(true)}
+                  className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#CBD5E1] hover:border-[#FF4D2D] hover:bg-[#FFF5F2] text-[#766E65] hover:text-[#FF4D2D] text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Deliver to a New Address / Location</span>
+                </button>
+              )}
             </div>
 
             {/* 2. Delivery Preferences Section */}
@@ -327,33 +434,106 @@ export default function CheckoutPage() {
               onChangeInstructions={(text) => setDeliveryInstructions(text)}
             />
 
-            {/* 3. Payment Method Selector */}
+            {/* 3. Payment Gateway Selector */}
             <div className="p-6 rounded-3xl bg-white border border-[#EBE5DF] shadow-xs space-y-4">
-              <h3 className="text-base font-bold text-[#1A1715] flex items-center gap-2">
-                <Lock className="w-4 h-4 text-[#FF4D2D]" />
-                <span>3. Select Payment Method (India Focused)</span>
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-[#1A1715] flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-[#FF4D2D]" />
+                  <span>3. Payment Gateway & Method</span>
+                </h3>
+                <span className="text-[10px] font-bold text-[#16A34A] uppercase bg-[#ECFDF5] px-2.5 py-0.5 rounded-full border border-[#A7F3D0]">
+                  PCI-DSS Level 1
+                </span>
+              </div>
 
               <div className="space-y-3">
-                {/* UPI Option */}
+                {/* 1. Razorpay Option (Recommended) */}
+                <div
+                  onClick={() => setPaymentMethod("razorpay")}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    paymentMethod === "razorpay"
+                      ? "bg-[#FFF5F2] border-[#FF4D2D] ring-1 ring-[#FF4D2D]"
+                      : "bg-[#FAF8F5] border-[#EBE5DF] hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-[#0C2340] text-white">
+                        <QrCode className="w-5 h-5 text-[#58A6FF]" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-sm text-[#1A1715]">
+                            Razorpay Smart Gateway (India Recommended)
+                          </p>
+                          <span className="px-1.5 py-0.5 rounded-md bg-[#0C2340] text-white text-[9px] font-bold">
+                            FASTEST
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#766E65]">
+                          Instant UPI QR • GPay • PhonePe • RuPay • Cards • Net Banking
+                        </p>
+                      </div>
+                    </div>
+                    {paymentMethod === "razorpay" && (
+                      <CheckCircle2 className="w-5 h-5 text-[#FF4D2D]" />
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Stripe Global Gateway */}
+                <div
+                  onClick={() => setPaymentMethod("stripe")}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    paymentMethod === "stripe"
+                      ? "bg-[#FFF5F2] border-[#FF4D2D] ring-1 ring-[#FF4D2D]"
+                      : "bg-[#FAF8F5] border-[#EBE5DF] hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-[#635BFF] text-white">
+                        <CreditCard className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-sm text-[#1A1715]">
+                            Stripe Global Gateway
+                          </p>
+                          <span className="px-1.5 py-0.5 rounded-md bg-[#635BFF] text-white text-[9px] font-bold">
+                            INTERNATIONAL
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#766E65]">
+                          Visa, Mastercard, Amex, Apple Pay, Global Cards
+                        </p>
+                      </div>
+                    </div>
+                    {paymentMethod === "stripe" && (
+                      <CheckCircle2 className="w-5 h-5 text-[#FF4D2D]" />
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Direct UPI VPA */}
                 <div
                   onClick={() => setPaymentMethod("upi")}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                     paymentMethod === "upi"
                       ? "bg-[#FFF5F2] border-[#FF4D2D] ring-1 ring-[#FF4D2D]"
-                      : "bg-[#FAF8F5] border-[#EBE5DF]"
+                      : "bg-[#FAF8F5] border-[#EBE5DF] hover:bg-white"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-white text-[#FF4D2D]">
-                        <QrCode className="w-5 h-5" />
+                      <div className="p-2.5 rounded-xl bg-white text-[#FF4D2D] border border-[#E5DDD4]">
+                        <Smartphone className="w-5 h-5" />
                       </div>
                       <div>
                         <p className="font-bold text-sm text-[#1A1715]">
-                          Instant UPI (GPay, PhonePe, Paytm, BHIM)
+                          Direct UPI VPA ID
                         </p>
-                        <p className="text-xs text-[#766E65]">Zero transaction fee • Instant confirmation</p>
+                        <p className="text-xs text-[#766E65]">Enter UPI Virtual Payment Address (e.g. mobile@upi)</p>
                       </div>
                     </div>
                     {paymentMethod === "upi" && (
@@ -374,55 +554,28 @@ export default function CheckoutPage() {
                   )}
                 </div>
 
-                {/* Cards Option */}
+                {/* 4. Cash on Delivery */}
                 <div
-                  onClick={() => setPaymentMethod("card")}
+                  onClick={() => setPaymentMethod("cod")}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                    paymentMethod === "card"
+                    paymentMethod === "cod"
                       ? "bg-[#FFF5F2] border-[#FF4D2D] ring-1 ring-[#FF4D2D]"
-                      : "bg-[#FAF8F5] border-[#EBE5DF]"
+                      : "bg-[#FAF8F5] border-[#EBE5DF] hover:bg-white"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-white text-[#1A1715]">
-                        <CreditCard className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm text-[#1A1715]">
-                          Credit or Debit Card (Visa, Mastercard, RuPay)
-                        </p>
-                        <p className="text-xs text-[#766E65]">256-Bit SSL Encrypted & Razorpay Ready</p>
-                      </div>
-                    </div>
-                    {paymentMethod === "card" && (
-                      <CheckCircle2 className="w-5 h-5 text-[#FF4D2D]" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Netbanking Option */}
-                <div
-                  onClick={() => setPaymentMethod("netbanking")}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                    paymentMethod === "netbanking"
-                      ? "bg-[#FFF5F2] border-[#FF4D2D] ring-1 ring-[#FF4D2D]"
-                      : "bg-[#FAF8F5] border-[#EBE5DF]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-white text-[#1A1715]">
+                      <div className="p-2.5 rounded-xl bg-[#16A34A] text-white">
                         <Building className="w-5 h-5" />
                       </div>
                       <div>
                         <p className="font-bold text-sm text-[#1A1715]">
-                          Net Banking (HDFC, ICICI, SBI, Axis)
+                          Cash on Delivery (Pay at Doorstep)
                         </p>
-                        <p className="text-xs text-[#766E65]">Direct bank gateway authorization</p>
+                        <p className="text-xs text-[#766E65]">Pay via Cash or courier QR upon parcel handover</p>
                       </div>
                     </div>
-                    {paymentMethod === "netbanking" && (
+                    {paymentMethod === "cod" && (
                       <CheckCircle2 className="w-5 h-5 text-[#FF4D2D]" />
                     )}
                   </div>
@@ -511,13 +664,45 @@ export default function CheckoutPage() {
                 ) : (
                   <>
                     <ShieldCheck className="w-5 h-5" />
-                    <span>Confirm & Pay ₹{grandTotal}</span>
+                    <span>
+                      {paymentMethod === "razorpay"
+                        ? `Pay ₹${grandTotal} with Razorpay`
+                        : paymentMethod === "stripe"
+                        ? `Pay ₹${grandTotal} with Stripe`
+                        : `Confirm & Place Order ₹${grandTotal}`}
+                    </span>
                   </>
                 )}
               </button>
             </div>
           </div>
         </div>
+
+        {/* Add Address Modal */}
+        <AddAddressModal
+          isOpen={isAddressModalOpen}
+          onClose={() => setIsAddressModalOpen(false)}
+          onSave={(newAddr) => {
+            saveNewAddress(newAddr);
+            setIsAddressPickerOpen(false);
+          }}
+          defaultName={user?.name || "Ritish Sharma"}
+          defaultPhone={user?.phone || "+91 98201 44521"}
+        />
+
+        {/* Payment Gateway Modal */}
+        <PaymentGatewayModal
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          gateway={paymentMethod === "stripe" ? "stripe" : "razorpay"}
+          amount={grandTotal}
+          orderNumber={pendingOrderId}
+          customerName={user?.name || "Customer"}
+          customerPhone={user?.phone}
+          onSuccess={(paymentId, gateway) => {
+            finalizeOrder(pendingOrderId, gateway as any, "paid");
+          }}
+        />
       </div>
     </div>
   );
